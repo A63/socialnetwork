@@ -254,3 +254,9 @@ void udpstream_listen(int sock, struct sockaddr* addr, socklen_t addrlen)
 {
   bind(sock, addr, addrlen);
 }
+
+void udpstream_getaddr(struct udpstream* stream, struct sockaddr* addr, socklen_t* addrlen)
+{
+  if(*addrlen>stream->addrlen){*addrlen=stream->addrlen;}
+  memcpy(addr, &stream->addr, *addrlen);
+}

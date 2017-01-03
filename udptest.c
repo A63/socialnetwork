@@ -37,7 +37,7 @@ int main(int argc, char** argv)
   else if(argc>1)
   {
     struct addrinfo* ai;
-    getaddrinfo("127.0.0.1", argv[1], 0, &ai);
+    getaddrinfo("0.0.0.0", argv[1], 0, &ai);
     udpstream_listen(sock, ai->ai_addr, ai->ai_addrlen);
     freeaddrinfo(ai);
   }
@@ -60,6 +60,14 @@ int main(int argc, char** argv)
       struct udpstream* rstream;
       while((rstream=udpstream_poll()))
       {
+        struct sockaddr_in addr;
+        socklen_t addrlen=sizeof(addr);
+        udpstream_getaddr(rstream, (struct sockaddr*)&addr, &addrlen);
+        if(addr.sin_family==AF_INET)
+        {
+          uint32_t ip=addr.sin_addr.s_addr;
+          printf("From: %u.%u.%u.%u:%hu:\n", ip%0x100, (ip/0x100)%0x100, (ip/0x10000)%0x100, ip/0x1000000, ntohs(addr.sin_port));
+        }
         stream=rstream;
         ssize_t len=udpstream_read(rstream, buf, 1024);
         if(len<1){continue;}
