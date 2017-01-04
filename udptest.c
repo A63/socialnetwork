@@ -38,7 +38,7 @@ int main(int argc, char** argv)
   {
     struct addrinfo* ai;
     getaddrinfo("0.0.0.0", argv[1], 0, &ai);
-    udpstream_listen(sock, ai->ai_addr, ai->ai_addrlen);
+    bind(sock, ai->ai_addr, ai->ai_addrlen);
     freeaddrinfo(ai);
   }
   struct pollfd pfd[]={{.fd=0, .events=POLLIN, .revents=0}, {.fd=sock, .events=POLLIN, .revents=0}};

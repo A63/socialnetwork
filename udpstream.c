@@ -250,13 +250,10 @@ ssize_t udpstream_write(struct udpstream* stream, void* buf, size_t size)
   return size;
 }
 
-void udpstream_listen(int sock, struct sockaddr* addr, socklen_t addrlen)
-{
-  bind(sock, addr, addrlen);
-}
-
 void udpstream_getaddr(struct udpstream* stream, struct sockaddr* addr, socklen_t* addrlen)
 {
   if(*addrlen>stream->addrlen){*addrlen=stream->addrlen;}
   memcpy(addr, &stream->addr, *addrlen);
 }
+
+int udpstream_getsocket(struct udpstream* stream){return stream->sock;}

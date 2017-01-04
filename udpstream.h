@@ -14,6 +14,10 @@
     You should have received a copy of the GNU Affero General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+#ifndef UDPSTREAM_H
+#define UDPSTREAM_H
+#include <sys/socket.h>
+
 struct udpstream;
 
 // Create a new stream on the given socket that sends and receives to/from the given address
@@ -28,7 +32,8 @@ extern ssize_t udpstream_read(struct udpstream* stream, void* buf, size_t size);
 
 extern ssize_t udpstream_write(struct udpstream* stream, void* buf, size_t size);
 
-extern void udpstream_listen(int sock, struct sockaddr* addr, socklen_t addrlen);
-
 // Get the network address of a stream's peer (useful for UDP-punchthrough)
 extern void udpstream_getaddr(struct udpstream* stream, struct sockaddr* addr, socklen_t* addrlen);
+
+extern int udpstream_getsocket(struct udpstream* stream);
+#endif
