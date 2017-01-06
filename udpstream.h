@@ -30,7 +30,7 @@ extern struct udpstream* udpstream_poll(void);
 
 extern ssize_t udpstream_read(struct udpstream* stream, void* buf, size_t size);
 
-extern ssize_t udpstream_write(struct udpstream* stream, void* buf, size_t size);
+extern ssize_t udpstream_write(struct udpstream* stream, const void* buf, size_t size);
 
 // Get the network address of a stream's peer (useful for UDP-punchthrough)
 extern void udpstream_getaddr(struct udpstream* stream, struct sockaddr* addr, socklen_t* addrlen);

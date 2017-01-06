@@ -87,7 +87,7 @@ static struct udpstream* stream_find(struct sockaddr* addr, socklen_t addrlen)
   return 0;
 }
 
-static ssize_t stream_send(struct udpstream* stream, uint8_t type, uint16_t seq, uint32_t size, void* buf)
+static ssize_t stream_send(struct udpstream* stream, uint8_t type, uint16_t seq, uint32_t size, const void* buf)
 {
 // TODO: Include a checksum in the header?
   unsigned char header[HEADERSIZE];
@@ -236,7 +236,7 @@ ssize_t udpstream_read(struct udpstream* stream, void* buf, size_t size)
   return -1;
 }
 
-ssize_t udpstream_write(struct udpstream* stream, void* buf, size_t size)
+ssize_t udpstream_write(struct udpstream* stream, const void* buf, size_t size)
 {
 // TODO: abort and return negative if sentpacketcount is too high? EWOULDBLOCK?
   ++stream->sentpacketcount;
