@@ -34,9 +34,10 @@ struct peer
 // Macros for printing peer IDs in printf-family of functions
 #define PEERFMT "%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x"
 #define PEERARG(x) x[0],x[1],x[2],x[3],x[4],x[5],x[6],x[7],x[8],x[9],x[10],x[11],x[12],x[13],x[14],x[15],x[16],x[17],x[18],x[19]
+extern unsigned char peer_id[20];
 
 extern void peer_registercmd(const char* name, void(*callback)(struct peer*,void*,unsigned int));
-extern void peer_init(void);
+extern void peer_init(const char* keypath);
 extern struct peer* peer_new(struct udpstream* stream, char server);
 extern struct peer* peer_get(struct udpstream* stream);
 extern struct peer* peer_new_unique(int sock, struct sockaddr* addr, socklen_t addrlen);

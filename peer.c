@@ -34,10 +34,12 @@ struct command
   void(*callback)(struct peer*,void*,unsigned int);
 };
 
+unsigned char peer_id[20];
 static struct peer** peers=0;
 static unsigned int peercount=0;
 static struct command* commands=0;
 static unsigned int commandcount=0;
+static gnutls_x509_privkey_t privkey=0;
 
 void peer_registercmd(const char* name, void(*callback)(struct peer*,void*,unsigned int))
 {
@@ -122,9 +124,45 @@ static void getpeers(struct peer* peer, void* data, unsigned int len)
 printf("We now have %u peers\n", peercount);
 }
 
-void peer_init(void)
+void peer_init(const char* keypath)
 {
   gnutls_global_init();
+  // Load our private key, or generate one if we don't have one yet
+  if(!privkey)
+  {
+    gnutls_x509_privkey_init(&privkey);
+    struct stat st;
+    char loadfailed=1;
+    if(!stat(keypath, &st))
+    {
+      gnutls_datum_t keydata;
+      keydata.size=st.st_size;
+      keydata.data=malloc(st.st_size);
+      int f=open(keypath, O_RDONLY);
+      read(f, keydata.data, st.st_size);
+      close(f);
+      // TODO: Allow encrypted keys, using _import2()
+      if(!gnutls_x509_privkey_import2(privkey, &keydata, GNUTLS_X509_FMT_PEM, 0, GNUTLS_PKCS_PLAIN)){loadfailed=0;}
+      free(keydata.data);
+    }
+    if(loadfailed)
+    {
+// printf("Generating a new key...\n");
+      // TODO: Why do handshakes fail with >3072 bit keys?
+      gnutls_x509_privkey_generate(privkey, GNUTLS_PK_RSA, 3072, 0);
+// printf("Done\n");
+      // TODO: Allow exporting encrypted key, using _export2_pkcs8() I think
+      gnutls_datum_t keydata;
+      gnutls_x509_privkey_export2(privkey, GNUTLS_X509_FMT_PEM, &keydata);
+      int f=open(keypath, O_WRONLY|O_TRUNC|O_CREAT, 0600);
+      write(f, keydata.data, keydata.size);
+      close(f);
+      gnutls_free(keydata.data);
+    }
+    size_t size=20;
+    gnutls_x509_privkey_get_key_id(privkey, 0, peer_id, &size);
+  }
+  // Register core commands
   peer_registercmd("getpeers", sendpeers);
   peer_registercmd("peers", getpeers);
 }
@@ -146,7 +184,7 @@ static int checkcert(gnutls_session_t tls)
   if(!count){return 1;}
   gnutls_x509_crt_t cert;
   gnutls_x509_crt_init(&cert);
-  int x=gnutls_x509_crt_import(cert, certs, GNUTLS_X509_FMT_DER);
+  gnutls_x509_crt_import(cert, certs, GNUTLS_X509_FMT_DER);
   // Get the certificate's public key ID
   size_t size=20;
   gnutls_x509_crt_get_key_id(cert, 0, peer->id, &size);
@@ -157,51 +195,16 @@ static int checkcert(gnutls_session_t tls)
 
 static void generatecert(gnutls_certificate_credentials_t cred)
 {
-// TODO: Configurable key path
-  // Load our private key, or generate one if we don't have one yet
-  static gnutls_x509_privkey_t key=0;
-  if(!key)
-  {
-    gnutls_x509_privkey_init(&key);
-    struct stat st;
-    char loadfailed=1;
-    if(!stat("priv.pem", &st))
-    {
-      gnutls_datum_t keydata;
-      keydata.size=st.st_size;
-      keydata.data=malloc(st.st_size);
-      int f=open("priv.pem", O_RDONLY);
-      read(f, keydata.data, st.st_size);
-      close(f);
-      // TODO: Allow encrypted keys, using _import2()
-      if(!gnutls_x509_privkey_import2(key, &keydata, GNUTLS_X509_FMT_PEM, 0, GNUTLS_PKCS_PLAIN)){loadfailed=0;}
-      free(keydata.data);
-    }
-    if(loadfailed)
-    {
-// printf("Generating a new key...\n");
-      // TODO: Why do handshakes fail with >3072 bit keys?
-      gnutls_x509_privkey_generate(key, GNUTLS_PK_RSA, 3072, 0);
-// printf("Done\n");
-      // TODO: Allow exporting encrypted key, using _export2_pkcs8() I think
-      gnutls_datum_t keydata;
-      gnutls_x509_privkey_export2(key, GNUTLS_X509_FMT_PEM, &keydata);
-      int f=open("priv.pem", O_WRONLY|O_TRUNC|O_CREAT, 0600);
-      write(f, keydata.data, keydata.size);
-      close(f);
-      gnutls_free(keydata.data);
-    }
-  }
   // Generate the certificate
   gnutls_x509_crt_t cert;
   gnutls_datum_t certdata;
   gnutls_x509_crt_init(&cert);
-  gnutls_x509_crt_set_key(cert, key);
+  gnutls_x509_crt_set_key(cert, privkey);
   gnutls_x509_crt_set_serial(cert, "", 1);
   gnutls_x509_crt_set_activation_time(cert, time(0)-3600); // Allow up to an hour of time drift
   gnutls_x509_crt_set_expiration_time(cert, time(0)+3600);
-  gnutls_x509_crt_sign(cert, cert, key);
-  gnutls_certificate_set_x509_key(cred, &cert, 1, key);
+  gnutls_x509_crt_sign(cert, cert, privkey);
+  gnutls_certificate_set_x509_key(cred, &cert, 1, privkey);
   gnutls_x509_crt_deinit(cert);
 }
 
