@@ -208,6 +208,21 @@ static void generatecert(gnutls_certificate_credentials_t cred)
   gnutls_x509_crt_deinit(cert);
 }
 
+static struct peer* findpending(void)
+{
+  struct udpstream* stream=udpstream_poll();
+  if(stream)
+  {
+    return peer_get(stream);
+  }
+  unsigned int i;
+  for(i=0; i<peercount; ++i)
+  {
+    if(gnutls_record_check_pending(peers[i]->tls)){return peers[i];}
+  }
+  return 0;
+}
+
 struct peer* peer_new(struct udpstream* stream, char server)
 {
   struct peer* peer=malloc(sizeof(struct peer));
@@ -291,10 +306,9 @@ void peer_bootstrap(int sock, const char* peerlist)
 void peer_handlesocket(int sock) // Incoming data
 {
   udpstream_readsocket(sock); // If it locks up here we're probably missing a bootstrap node
-  struct udpstream* stream;
-  while((stream=udpstream_poll()))
+  struct peer* peer;
+  while((peer=findpending()))
   {
-    struct peer* peer=peer_get(stream);
     if(!peer->handshake)
     {
 // TODO: GNUTLS_E_UNEXPECTED_HANDSHAKE_PACKET seems to indicate we're connecting to ourselves
@@ -309,36 +323,38 @@ void peer_handlesocket(int sock) // Incoming data
     // Get command name, data, and then call the callbacks registered for the command
     if(!peer->cmdlength)
     {
-      udpstream_read(peer->stream, &peer->cmdlength, sizeof(peer->cmdlength));
+      gnutls_record_recv(peer->tls, &peer->cmdlength, sizeof(peer->cmdlength));
+      continue;
     }
     else if(!peer->cmdname)
     {
       peer->cmdname=malloc(peer->cmdlength+1);
-      udpstream_read(peer->stream, peer->cmdname, peer->cmdlength);
+      gnutls_record_recv(peer->tls, peer->cmdname, peer->cmdlength);
       peer->cmdname[peer->cmdlength]=0;
+      continue;
     }
     else if(peer->datalength<0)
     {
-      udpstream_read(peer->stream, &peer->datalength, sizeof(peer->datalength));
-    }else{
-printf("Received command '%s' from peer "PEERFMT"\n", peer->cmdname, PEERARG(peer->id));
-      // Call the relevant callback, if any
-      char data[peer->datalength+1]; // TODO: malloc instead? or somehow conditionally
-      udpstream_read(peer->stream, data, peer->datalength);
-      data[peer->datalength]=0;
-      unsigned int i;
-      for(i=0; i<commandcount; ++i)
-      {
-        if(!strcmp(commands[i].name, peer->cmdname))
-        {
-          commands[i].callback(peer, data, peer->datalength);
-        }
-      }
-      free(peer->cmdname);
-      peer->cmdname=0;
-      peer->cmdlength=0;
-      peer->datalength=-1;
+      gnutls_record_recv(peer->tls, &peer->datalength, sizeof(peer->datalength));
+      if(peer->datalength){continue;} // If it's a 0-length command just keep going
     }
+printf("Received command '%s' from peer "PEERFMT"\n", peer->cmdname, PEERARG(peer->id));
+    // Call the relevant callback, if any
+    char data[peer->datalength+1]; // TODO: malloc instead? or somehow conditionally
+    gnutls_record_recv(peer->tls, data, peer->datalength);
+    data[peer->datalength]=0;
+    unsigned int i;
+    for(i=0; i<commandcount; ++i)
+    {
+      if(!strcmp(commands[i].name, peer->cmdname))
+      {
+        commands[i].callback(peer, data, peer->datalength);
+      }
+    }
+    free(peer->cmdname);
+    peer->cmdname=0;
+    peer->cmdlength=0;
+    peer->datalength=-1;
   }
 }
 
@@ -355,8 +371,10 @@ void peer_sendcmd(struct peer* peer, const char* cmd, void* data, uint32_t len)
     return;
   }
   uint8_t cmdlen=strlen(cmd);
-  udpstream_write(peer->stream, &cmdlen, sizeof(cmdlen));
-  udpstream_write(peer->stream, cmd, cmdlen);
-  udpstream_write(peer->stream, &len, sizeof(len));
-  udpstream_write(peer->stream, data, len);
+  gnutls_record_cork(peer->tls);
+  gnutls_record_send(peer->tls, &cmdlen, sizeof(cmdlen));
+  gnutls_record_send(peer->tls, cmd, cmdlen);
+  gnutls_record_send(peer->tls, &len, sizeof(len));
+  gnutls_record_send(peer->tls, data, len);
+  gnutls_record_uncork(peer->tls, GNUTLS_RECORD_WAIT);
 }
