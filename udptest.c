@@ -68,9 +68,9 @@ int main(int argc, char** argv)
           uint32_t ip=addr.sin_addr.s_addr;
           printf("From: %u.%u.%u.%u:%hu:\n", ip%0x100, (ip/0x100)%0x100, (ip/0x10000)%0x100, ip/0x1000000, ntohs(addr.sin_port));
         }
-        stream=rstream;
         ssize_t len=udpstream_read(rstream, buf, 1024);
-        if(len<1){continue;}
+        if(len<1){udpstream_close(rstream); if(stream==rstream){stream=0;} continue;}
+        stream=rstream;
         write(1, buf, len);
       }
     }

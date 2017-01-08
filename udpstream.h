@@ -36,4 +36,6 @@ extern ssize_t udpstream_write(struct udpstream* stream, const void* buf, size_t
 extern void udpstream_getaddr(struct udpstream* stream, struct sockaddr* addr, socklen_t* addrlen);
 
 extern int udpstream_getsocket(struct udpstream* stream);
+
+extern void udpstream_close(struct udpstream* stream);
 #endif
