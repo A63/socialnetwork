@@ -44,3 +44,4 @@ extern struct peer* peer_new_unique(int sock, struct sockaddr* addr, socklen_t a
 extern void peer_bootstrap(int sock, const char* peerlist);
 extern void peer_handlesocket(int sock); // Incoming data
 extern void peer_sendcmd(struct peer* peer, const char* cmd, void* data, uint32_t len);
+extern void peer_disconnect(struct peer* peer, char cleanly);

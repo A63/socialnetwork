@@ -189,8 +189,8 @@ static int checkcert(gnutls_session_t tls)
   size_t size=20;
   gnutls_x509_crt_get_key_id(cert, 0, peer->id, &size);
   gnutls_x509_crt_deinit(cert);
-// TODO: Make sure the ID is unique? and not ours?
-  return 0;
+  // Make sure we're not connecting to ourselves. TODO: Make sure we're not connecting to someone else we're already connected to as well? (different addresses, same ID) may cause issues with reconnects and/or multiple sessions
+  return !memcmp(peer->id, peer_id, 20);
 }
 
 static void generatecert(gnutls_certificate_credentials_t cred)
@@ -234,6 +234,7 @@ struct peer* peer_new(struct udpstream* stream, char server)
   peer->datalength=-1;
   peer->addrlen=sizeof(peer->addr);
   udpstream_getaddr(stream, &peer->addr, &peer->addrlen);
+  memset(peer->id, 0, 20);
   gnutls_init(&peer->tls, (server?GNUTLS_SERVER:GNUTLS_CLIENT)|GNUTLS_NONBLOCK);
   // Priority
   gnutls_priority_set_direct(peer->tls, "NORMAL", 0);
@@ -303,6 +304,7 @@ void peer_bootstrap(int sock, const char* peerlist)
   }
 }
 
+#define readordie(x,y,z) {ssize_t r=gnutls_record_recv(x->tls,y,z); if(z && r<1){peer_disconnect(x, 0); continue;}}
 void peer_handlesocket(int sock) // Incoming data
 {
   udpstream_readsocket(sock); // If it locks up here we're probably missing a bootstrap node
@@ -312,7 +314,9 @@ void peer_handlesocket(int sock) // Incoming data
     if(!peer->handshake)
     {
 // TODO: GNUTLS_E_UNEXPECTED_HANDSHAKE_PACKET seems to indicate we're connecting to ourselves
-      peer->handshake=!gnutls_handshake(peer->tls);
+      int res=gnutls_handshake(peer->tls);
+      if(gnutls_error_is_fatal(res)){peer_disconnect(peer, 0); continue;}
+      peer->handshake=!res;
   // TODO: handle gnutls_error_is_fatal(x)?
       if(peer->handshake)
       {
@@ -323,25 +327,25 @@ void peer_handlesocket(int sock) // Incoming data
     // Get command name, data, and then call the callbacks registered for the command
     if(!peer->cmdlength)
     {
-      gnutls_record_recv(peer->tls, &peer->cmdlength, sizeof(peer->cmdlength));
+      readordie(peer, &peer->cmdlength, sizeof(peer->cmdlength));
       continue;
     }
     else if(!peer->cmdname)
     {
       peer->cmdname=malloc(peer->cmdlength+1);
-      gnutls_record_recv(peer->tls, peer->cmdname, peer->cmdlength);
+      readordie(peer, peer->cmdname, peer->cmdlength);
       peer->cmdname[peer->cmdlength]=0;
       continue;
     }
     else if(peer->datalength<0)
     {
-      gnutls_record_recv(peer->tls, &peer->datalength, sizeof(peer->datalength));
+      readordie(peer, &peer->datalength, sizeof(peer->datalength));
       if(peer->datalength){continue;} // If it's a 0-length command just keep going
     }
 printf("Received command '%s' from peer "PEERFMT"\n", peer->cmdname, PEERARG(peer->id));
     // Call the relevant callback, if any
     char data[peer->datalength+1]; // TODO: malloc instead? or somehow conditionally
-    gnutls_record_recv(peer->tls, data, peer->datalength);
+    readordie(peer, data, peer->datalength);
     data[peer->datalength]=0;
     unsigned int i;
     for(i=0; i<commandcount; ++i)
@@ -377,4 +381,22 @@ void peer_sendcmd(struct peer* peer, const char* cmd, void* data, uint32_t len)
   gnutls_record_send(peer->tls, &len, sizeof(len));
   gnutls_record_send(peer->tls, data, len);
   gnutls_record_uncork(peer->tls, GNUTLS_RECORD_WAIT);
+}
+
+void peer_disconnect(struct peer* peer, char cleanly)
+{
+  if(cleanly){gnutls_bye(peer->tls, GNUTLS_SHUT_WR);}
+  gnutls_deinit(peer->tls);
+  udpstream_close(peer->stream);
+  free(peer->cmdname);
+  free(peer);
+  unsigned int i;
+  for(i=0; i<peercount; ++i)
+  {
+    if(peers[i]==peer)
+    {
+      --peercount;
+      memmove(&peers[i], &peers[i+1], sizeof(void*)*(peercount-i));
+    }
+  }
 }
