@@ -124,6 +124,85 @@ static void getpeers(struct peer* peer, void* data, unsigned int len)
 printf("We now have %u peers\n", peercount);
 }
 
+struct findpeer_request
+{
+  unsigned char id[20];
+  struct sockaddr addr;
+  uint16_t addrlen;
+  time_t timestamp;
+};
+static void findpeer(struct peer* peer, void* data, unsigned int len)
+{
+  // <target ID, 20><ttl, 2>[<addrlen, 2><source addr>]
+  // Sender can't know their own address, so the first recipient will need to add the address of whoever they got it from
+  uint16_t ttl;
+  if(len<20+sizeof(ttl)){return;}
+  unsigned char id[20];
+  memcpy(id, data, 20);
+printf("Got findpeer request for '"PEERFMT"'\n", PEERARG(id));
+  memcpy(&ttl, data+20, sizeof(ttl));
+  if(!ttl){return;}
+  --ttl;
+  struct sockaddr addr;
+  uint16_t addrlen;
+  if(len>20+sizeof(ttl)+sizeof(addrlen))
+  { // Has address already
+    memcpy(&addrlen, data+20+sizeof(ttl), sizeof(addrlen));
+    if(len<20+sizeof(ttl)+sizeof(addrlen)+addrlen){return;}
+    memcpy(&addr, data+20+sizeof(ttl)+sizeof(addrlen), addrlen);
+  }
+  else if(len==20+sizeof(ttl))
+  { // Get address from sender
+    addrlen=peer->addrlen;
+    memcpy(&addr, &peer->addr, addrlen);
+  }else{return;}
+  // Avoid floody loops by keeping track of what we've already handled recently
+  static struct findpeer_request* reqs=0;
+  static unsigned int reqcount=0;
+  time_t now=time(0);
+  struct findpeer_request* newentry=0;
+  unsigned int i;
+  for(i=0; i<reqcount; ++i)
+  {
+    if(reqs[i].timestamp+30<now) // Old entry (30 seconds)
+    {
+      newentry=&reqs[i]; // Mark as replacable
+    }
+    else if(!memcmp(reqs[i].id, id, 20) && reqs[i].addrlen==addrlen && !memcmp(&reqs[i].addr, &addr, addrlen))
+    { // Already handled, update the timestamp too in case it keeps coming for a while
+      reqs[i].timestamp=now;
+      return;
+    }
+  }
+  if(!newentry) // Make room for new entry if there were no old ones to replace
+  {
+    ++reqcount;
+    reqs=realloc(reqs, sizeof(struct findpeer_request)*reqcount);
+    newentry=&reqs[reqcount-1];
+  }
+  memcpy(newentry->id, id, 20);
+  memcpy(&newentry->addr, &addr, addrlen);
+  newentry->addrlen=addrlen;
+  newentry->timestamp=now;
+  // Check if it's us
+  if(!memcmp(id, peer_id, 20))
+  {
+    peer_new_unique(udpstream_getsocket(peer->stream), &addr, addrlen);
+    return;
+  }
+  // Propagate (unless it was us, !ttl, or already handled)
+  if(ttl)
+  {
+    len=20+sizeof(ttl)+sizeof(addrlen)+addrlen;
+    unsigned char data[len];
+    memcpy(data, id, 20);
+    memcpy(data+20, &ttl, sizeof(ttl));
+    memcpy(data+20+sizeof(ttl), &addrlen, sizeof(addrlen));
+    memcpy(data+20+sizeof(ttl)+sizeof(addrlen), &addr, addrlen);
+    peer_sendcmd(0, "findpeer", data, len);
+  }
+}
+
 void peer_init(const char* keypath)
 {
   gnutls_global_init();
@@ -165,6 +244,7 @@ void peer_init(const char* keypath)
   // Register core commands
   peer_registercmd("getpeers", sendpeers);
   peer_registercmd("peers", getpeers);
+  peer_registercmd("findpeer", findpeer);
 }
 
 static int checkcert(gnutls_session_t tls)
@@ -399,4 +479,14 @@ void peer_disconnect(struct peer* peer, char cleanly)
       memmove(&peers[i], &peers[i+1], sizeof(void*)*(peercount-i));
     }
   }
+}
+
+void peer_findpeer(const unsigned char id[20])
+{
+  uint16_t ttl=8; // 8 is probably a good level to start at, might need to be higher in the future
+  unsigned int len=20+sizeof(ttl);
+  unsigned char data[len];
+  memcpy(data, id, 20);
+  memcpy(data+20, &ttl, sizeof(ttl));
+  peer_sendcmd(0, "findpeer", data, len);
 }

@@ -45,3 +45,4 @@ extern void peer_bootstrap(int sock, const char* peerlist);
 extern void peer_handlesocket(int sock); // Incoming data
 extern void peer_sendcmd(struct peer* peer, const char* cmd, void* data, uint32_t len);
 extern void peer_disconnect(struct peer* peer, char cleanly);
+extern void peer_findpeer(const unsigned char id[20]); // Find and ask a peer to connect to us
