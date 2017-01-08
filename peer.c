@@ -35,6 +35,7 @@ struct command
 };
 
 unsigned char peer_id[20];
+gnutls_privkey_t peer_privkey=0;
 static struct peer** peers=0;
 static unsigned int peercount=0;
 static struct command* commands=0;
@@ -240,6 +241,8 @@ void peer_init(const char* keypath)
     }
     size_t size=20;
     gnutls_x509_privkey_get_key_id(privkey, 0, peer_id, &size);
+    gnutls_privkey_init(&peer_privkey);
+    gnutls_privkey_import_x509(peer_privkey, privkey, 0);
   }
   // Register core commands
   peer_registercmd("getpeers", sendpeers);
@@ -262,13 +265,11 @@ static int checkcert(gnutls_session_t tls)
   unsigned int count;
   const gnutls_datum_t* certs=gnutls_certificate_get_peers(tls, &count);
   if(!count){return 1;}
-  gnutls_x509_crt_t cert;
-  gnutls_x509_crt_init(&cert);
-  gnutls_x509_crt_import(cert, certs, GNUTLS_X509_FMT_DER);
+  gnutls_x509_crt_init(&peer->cert);
+  gnutls_x509_crt_import(peer->cert, certs, GNUTLS_X509_FMT_DER);
   // Get the certificate's public key ID
   size_t size=20;
-  gnutls_x509_crt_get_key_id(cert, 0, peer->id, &size);
-  gnutls_x509_crt_deinit(cert);
+  gnutls_x509_crt_get_key_id(peer->cert, 0, peer->id, &size);
   // Make sure we're not connecting to ourselves. TODO: Make sure we're not connecting to someone else we're already connected to as well? (different addresses, same ID) may cause issues with reconnects and/or multiple sessions
   return !memcmp(peer->id, peer_id, 20);
 }
@@ -315,6 +316,7 @@ struct peer* peer_new(struct udpstream* stream, char server)
   peer->addrlen=sizeof(peer->addr);
   udpstream_getaddr(stream, &peer->addr, &peer->addrlen);
   memset(peer->id, 0, 20);
+  peer->cert=0;
   gnutls_init(&peer->tls, (server?GNUTLS_SERVER:GNUTLS_CLIENT)|GNUTLS_NONBLOCK);
   // Priority
   gnutls_priority_set_direct(peer->tls, "NORMAL", 0);
@@ -467,6 +469,7 @@ void peer_disconnect(struct peer* peer, char cleanly)
 {
   if(cleanly){gnutls_bye(peer->tls, GNUTLS_SHUT_WR);}
   gnutls_deinit(peer->tls);
+  if(peer->cert){gnutls_x509_crt_deinit(peer->cert);}
   udpstream_close(peer->stream);
   free(peer->cmdname);
   free(peer);

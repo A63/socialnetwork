@@ -14,6 +14,7 @@
     You should have received a copy of the GNU Affero General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+#include <stdint.h>
 #include <gnutls/gnutls.h>
 #include "udpstream.h"
 
@@ -29,12 +30,14 @@ struct peer
   struct sockaddr addr;
   socklen_t addrlen;
   unsigned char id[20]; // SHA-1 sum of public key (binary)
+  gnutls_x509_crt_t cert;
   // TODO: Account stuff?
 };
 // Macros for printing peer IDs in printf-family of functions
 #define PEERFMT "%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x"
 #define PEERARG(x) x[0],x[1],x[2],x[3],x[4],x[5],x[6],x[7],x[8],x[9],x[10],x[11],x[12],x[13],x[14],x[15],x[16],x[17],x[18],x[19]
 extern unsigned char peer_id[20];
+extern gnutls_privkey_t peer_privkey;
 
 extern void peer_registercmd(const char* name, void(*callback)(struct peer*,void*,unsigned int));
 extern void peer_init(const char* keypath);
