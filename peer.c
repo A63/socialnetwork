@@ -278,7 +278,6 @@ static void generatecert(gnutls_certificate_credentials_t cred)
 {
   // Generate the certificate
   gnutls_x509_crt_t cert;
-  gnutls_datum_t certdata;
   gnutls_x509_crt_init(&cert);
   gnutls_x509_crt_set_key(cert, privkey);
   gnutls_x509_crt_set_serial(cert, "", 1);
@@ -492,4 +491,15 @@ void peer_findpeer(const unsigned char id[20])
   memcpy(data, id, 20);
   memcpy(data+20, &ttl, sizeof(ttl));
   peer_sendcmd(0, "findpeer", data, len);
+}
+
+struct peer* peer_findbyid(const unsigned char id[20])
+{
+  unsigned int i;
+  for(i=0; i<peercount; ++i)
+  {
+    if(!peers[i]->handshake){continue;}
+    if(!memcmp(peers[i]->id, id, 20)){return peers[i];}
+  }
+  return 0;
 }
