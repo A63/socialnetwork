@@ -503,3 +503,23 @@ struct peer* peer_findbyid(const unsigned char id[20])
   }
   return 0;
 }
+
+void peer_exportpeers(const char* path)
+{
+  int f=open(path, O_WRONLY|O_CREAT|O_TRUNC, 0644);
+  unsigned int i;
+  for(i=0; i<peercount; ++i)
+  {
+    if(!peers[i]->handshake){continue;} // Skip bad peers
+    switch(peers[i]->addr.sa_family)
+    {
+    case AF_INET:
+      {
+      struct sockaddr_in* addr=(struct sockaddr_in*)&peers[i]->addr;
+      unsigned char* ip=(unsigned char*)&addr->sin_addr.s_addr;
+      dprintf(f, "%hhu.%hhu.%hhu.%hhu:%hu\n", ip[0], ip[1], ip[2], ip[3], ntohs(addr->sin_port));
+      }
+    }
+  }
+  close(f);
+}

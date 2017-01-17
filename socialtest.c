@@ -122,6 +122,11 @@ int main(int argc, char** argv)
         buf[len]=0;
         social_updatefield(name, buf);
       }
+      else if(!strncmp(buf, "exportpeers ", 12))
+      {
+        peer_exportpeers(&buf[12]);
+      }
+      else{printf("Unknown command '%s'\n", buf);}
     }
     if(pfd[1].revents) // UDP
     {

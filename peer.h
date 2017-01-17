@@ -50,3 +50,4 @@ extern void peer_sendcmd(struct peer* peer, const char* cmd, void* data, uint32_
 extern void peer_disconnect(struct peer* peer, char cleanly);
 extern void peer_findpeer(const unsigned char id[20]); // Find and ask a peer to connect to us
 extern struct peer* peer_findbyid(const unsigned char id[20]);
+extern void peer_exportpeers(const char* path);
