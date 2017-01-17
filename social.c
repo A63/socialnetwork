@@ -204,7 +204,7 @@ void social_findfriends(void) // Call a second or so after init (once we have so
   }
 }
 
-void social_user_addtocircle(struct user* user, uint32_t circle, unsigned char id[20])
+void social_user_addtocircle(struct user* user, uint32_t circle, const unsigned char id[20])
 {
   if(circle>=user->circlecount)
   {
@@ -224,7 +224,7 @@ void social_user_addtocircle(struct user* user, uint32_t circle, unsigned char i
   c->friends[c->count-1]=friend;
 }
 
-void social_addfriend(unsigned char id[20], uint32_t circle)
+void social_addfriend(const unsigned char id[20], uint32_t circle)
 {
   struct user* friend=social_finduser(id);
   if(!friend){friend=user_new(id);}
@@ -287,7 +287,7 @@ void social_updatefield(const char* name, const char* value)
   social_shareupdate(post);
 }
 
-struct user* social_finduser(unsigned char id[20])
+struct user* social_finduser(const unsigned char id[20])
 {
   unsigned int i;
   for(i=0; i<social_usercount; ++i)
