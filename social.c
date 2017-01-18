@@ -59,66 +59,6 @@ static void user_save(struct user* user)
   close(f);
 }
 
-static void greetpeer(struct peer* peer, void* data, unsigned int len)
-{
-  // Figure out if they're one of our friends (TODO: or friends of friends)
-  unsigned int i, i2;
-  for(i=0; i<social_self->circlecount; ++i)
-  for(i2=0; i2<social_self->circles[i].count; ++i2)
-  {
-    struct user* user=social_self->circles[i].friends[i2];
-    if(!memcmp(user->id, peer->id, 20))
-    {
-      user->peer=peer;
-// TODO: Better way of getting someone's public key (I guess this is fine, but we need to be able to get it when they're not online too)
-      if(!user->pubkey)
-      {
-        gnutls_pubkey_init(&user->pubkey);
-        gnutls_pubkey_import_x509(user->pubkey, peer->cert, 0);
-        user_save(user);
-      }
-      // Ask for updates
-      len=20+sizeof(uint64_t);
-      unsigned char arg[len];
-      memcpy(arg, user->id, 20);
-      memcpy(arg+20, &user->seq, sizeof(user->seq));
-      peer_sendcmd(user->peer, "getupdates", arg, len);
-    }
-  }
-}
-
-static void sendupdate(struct peer* peer, const unsigned char id[20], struct update* update)
-{
-  struct buffer buf;
-  buffer_init(buf);
-  buffer_write(buf, id, 20);
-  buffer_write(buf, &update->signaturesize, sizeof(update->signaturesize));
-  buffer_write(buf, update->signature, update->signaturesize);
-  social_update_write(&buf, update);
-  peer_sendcmd(peer, "updateinfo", buf.buf, buf.size);
-  buffer_deinit(buf);
-}
-
-static void sendupdates(struct peer* peer, void* data, unsigned int len)
-{
-  // <ID, 20><seq, 8>
-  uint64_t seq;
-  if(len<20+sizeof(seq)){return;}
-  memcpy(&seq, data+20, sizeof(seq));
-  struct user* user;
-  // "getupdates" can also be requests for data of friends of friends
-  user=social_finduser(data);
-  if(!user){return;}
-  unsigned int i;
-  for(i=0; i<user->updatecount; ++i)
-  {
-    // TODO: Check privacy rules
-    // Also make sure not to send old news (based on seq)
-    if(user->updates[i].seq<=seq){continue;}
-    sendupdate(peer, user->id, &user->updates[i]);
-  }
-}
-
 static void user_load(struct user* user)
 {
   // TODO: Absolute path, something like $HOME/.socialnetwork
@@ -173,6 +113,69 @@ static struct user* user_new(const unsigned char id[20])
   return user;
 }
 
+static void greetpeer(struct peer* peer, void* data, unsigned int len)
+{
+  // Figure out if they're one of our friends (TODO: or friends of friends)
+  unsigned int i, i2;
+  for(i=0; i<social_self->circlecount; ++i)
+  for(i2=0; i2<social_self->circles[i].count; ++i2)
+  {
+    struct user* user=social_self->circles[i].friends[i2];
+    if(!memcmp(user->id, peer->id, 20))
+    {
+      user->peer=peer;
+// TODO: Better way of getting someone's public key (I guess this is fine, but we need to be able to get it when they're not online too)
+      if(!user->pubkey)
+      {
+        gnutls_pubkey_init(&user->pubkey);
+        gnutls_pubkey_import_x509(user->pubkey, peer->cert, 0);
+        user_save(user);
+      }
+      // Ask for updates
+      len=20+sizeof(uint64_t);
+      unsigned char arg[len];
+      memcpy(arg, user->id, 20);
+      memcpy(arg+20, &user->seq, sizeof(user->seq));
+      peer_sendcmd(user->peer, "getupdates", arg, len);
+    }
+  }
+}
+
+static void sendupdate(struct peer* peer, const unsigned char id[20], struct update* update)
+{
+  struct buffer buf;
+  buffer_init(buf);
+  buffer_write(buf, id, 20);
+  buffer_write(buf, &update->signaturesize, sizeof(update->signaturesize));
+  buffer_write(buf, update->signature, update->signaturesize);
+  social_update_write(&buf, update);
+  peer_sendcmd(peer, "updateinfo", buf.buf, buf.size);
+  buffer_deinit(buf);
+}
+
+static void sendupdates(struct peer* peer, void* data, unsigned int len)
+{
+  // <ID, 20><seq, 8>
+  uint64_t seq;
+  if(len<20+sizeof(seq)){return;}
+  memcpy(&seq, data+20, sizeof(seq));
+  struct user* user;
+  // "getupdates" can also be requests for data of friends of friends
+  user=social_finduser(data);
+  if(!user){return;}
+  struct user* peeruser=social_finduser(peer->id);
+  if(!peeruser){peeruser=user_new(peer->id);}
+  unsigned int i;
+  for(i=0; i<user->updatecount; ++i)
+  {
+    // Check privacy rules
+    if(!social_privacy_check(user, &user->updates[i].privacy, peeruser)){continue;}
+    // Also make sure not to send old news (based on seq)
+    if(user->updates[i].seq<=seq){continue;}
+    sendupdate(peer, user->id, &user->updates[i]);
+  }
+}
+
 void social_init(const char* keypath)
 {
   // Load key, friends, circles, etc. our own profile
@@ -204,7 +207,7 @@ void social_findfriends(void) // Call a second or so after init (once we have so
   }
 }
 
-void social_user_addtocircle(struct user* user, uint32_t circle, const unsigned char id[20])
+static struct friendslist* user_getcircle(struct user* user, uint32_t circle)
 {
   if(circle>=user->circlecount)
   {
@@ -214,11 +217,19 @@ void social_user_addtocircle(struct user* user, uint32_t circle, const unsigned 
       user->circles[user->circlecount].name=0;
       user->circles[user->circlecount].friends=0;
       user->circles[user->circlecount].count=0;
+      user->circles[user->circlecount].privacy.flags=0;
+      user->circles[user->circlecount].privacy.circles=0;
+      user->circles[user->circlecount].privacy.circlecount=0;
     }
   }
+  return &user->circles[circle];
+}
+
+void social_user_addtocircle(struct user* user, uint32_t circle, const unsigned char id[20])
+{
   struct user* friend=social_finduser(id);
   if(!friend){friend=user_new(id);}
-  struct friendslist* c=&user->circles[circle];
+  struct friendslist* c=user_getcircle(user, circle);
   ++c->count;
   c->friends=realloc(c->friends, sizeof(void*)*c->count);
   c->friends[c->count-1]=friend;
@@ -246,20 +257,19 @@ void social_addfriend(const unsigned char id[20], uint32_t circle)
   }
   social_user_addtocircle(social_self, circle, id);
 // TODO: Send a friend request/notification at some point?
-  struct update* update=social_update_new(social_self);
+  struct update* update=social_update_getfriend(social_self, circle, id);
   ++social_self->seq;
   update->seq=social_self->seq;
   update->type=UPDATE_FRIENDS;
   update->timestamp=time(0);
-  update->friends.circle=circle;
+  privcpy(update->privacy, social_self->circles[circle].privacy);
   update->friends.add=1;
-  memcpy(update->friends.id, id, 20);
   social_update_sign(update);
   social_update_save(social_self, update);
   social_shareupdate(update);
 }
 
-void social_createpost(const char* msg)
+void social_createpost(const char* msg, struct privacy* privacy)
 {
   // TODO: Posts attached to users and/or users' updates
   struct update* post=social_update_new(social_self);
@@ -267,20 +277,21 @@ void social_createpost(const char* msg)
   post->seq=social_self->seq;
   post->type=UPDATE_POST;
   post->timestamp=time(0);
+  privcpy(post->privacy, *privacy);
   post->post.message=strdup(msg);
   social_update_sign(post);
   social_update_save(social_self, post);
   social_shareupdate(post);
 }
 
-void social_updatefield(const char* name, const char* value)
+void social_updatefield(const char* name, const char* value, struct privacy* privacy)
 {
-  struct update* post=social_update_new(social_self);
+  struct update* post=social_update_getfield(social_self, name);
   ++social_self->seq;
   post->seq=social_self->seq;
   post->type=UPDATE_FIELD;
   post->timestamp=time(0);
-  post->field.name=strdup(name);
+  privcpy(post->privacy, *privacy);
   post->field.value=strdup(value);
   social_update_sign(post);
   social_update_save(social_self, post);
@@ -307,11 +318,38 @@ void social_shareupdate(struct update* update)
     unsigned int i2;
     for(i2=0; i2<c->count; ++i2)
     {
-// TODO: Privacy settings for updates
+      // Check privacy setting
+      if(!social_privacy_check(social_self, &update->privacy, c->friends[i2])){continue;}
       if(c->friends[i2]->peer)
       {
         sendupdate(c->friends[i2]->peer, social_self->id, update);
       }
     }
   }
+}
+
+char social_privacy_check(struct user* origin, struct privacy* privacy, struct user* user)
+{
+  if(privacy->flags&PRIVACY_ANYONE){return 1;}
+  unsigned int i, i2;
+  if(privacy->flags&PRIVACY_FRIENDS)
+  {
+    for(i=0; i<origin->circlecount; ++i)
+    {
+      for(i2=0; i2<origin->circles[i].count; ++i2)
+      {
+        if(origin->circles[i].friends[i2]==user){return 1;}
+      }
+    }
+  }
+  for(i=0; i<privacy->circlecount; ++i)
+  {
+    if(privacy->circles[i]>=origin->circlecount){continue;}
+    struct friendslist* circle=&origin->circles[privacy->circles[i]];
+    for(i2=0; i2<circle->count; ++i2)
+    {
+      if(circle->friends[i2]==user){return 1;}
+    }
+  }
+  return 0;
 }

@@ -17,20 +17,26 @@
 #ifndef SOCIAL_H
 #define SOCIAL_H
 #include <stdint.h>
-/* TODO: Privacy
-enum privacy
+#define PRIVACY_ANYONE  1
+#define PRIVACY_FRIENDS 2
+struct privacy
 {
-  PRIVACY_SELF=0,
-  PRIVACY_FRIENDS,
-  PRIVACY_FRIENDSOFFRIENDS,
-  PRIVACY_ANYONE
+  uint8_t flags;
+  uint32_t* circles; // Circle indexes
+  uint32_t circlecount;
+// TODO: Allow individual users as well?
 };
-*/
-// TODO: Posts need to be restrictable to given circles
+#define privcpy(dst,src) \
+  free((dst).circles); \
+  (dst).flags=(src).flags; \
+  (dst).circlecount=(src).circlecount; \
+  (dst).circles=malloc(sizeof(uint32_t)*(dst).circlecount); \
+  memcpy((dst).circles, (src).circles, sizeof(uint32_t)*(dst).circlecount)
 
 struct friendslist
 {
   char* name; // What to call this circle of friends
+  struct privacy privacy; // Privacy setting to use for additions and removals from this circle
   struct user** friends;
   unsigned int count;
 };
@@ -54,8 +60,9 @@ extern struct user* social_self; // Most things we need to keep track of for our
 extern void social_init(const char* keypath);
 extern void social_user_addtocircle(struct user* user, uint32_t circle, const unsigned char id[20]);
 extern void social_addfriend(const unsigned char id[20], uint32_t circle);
-extern void social_createpost(const char* msg);
-extern void social_updatefield(const char* name, const char* value);
+extern void social_createpost(const char* msg, struct privacy* privacy);
+extern void social_updatefield(const char* name, const char* value, struct privacy* privacy);
 extern struct user* social_finduser(const unsigned char id[20]);
 extern void social_shareupdate(struct update* update);
+extern char social_privacy_check(struct user* origin, struct privacy* privacy, struct user* user);
 #endif

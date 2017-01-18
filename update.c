@@ -45,6 +45,11 @@ void social_update_write(struct buffer* buf, struct update* update)
   buffer_write(*buf, &update->seq, sizeof(update->seq));
   buffer_write(*buf, &update->type, sizeof(update->type));
   buffer_write(*buf, &update->timestamp, sizeof(update->timestamp));
+  buffer_write(*buf, &update->privacy.flags, sizeof(update->privacy.flags));
+  buffer_write(*buf, &update->privacy.circlecount, sizeof(update->privacy.circlecount));
+  buffer_write(*buf, update->privacy.circles, update->privacy.circlecount);
+  uint32_t privplaceholder=0;
+  buffer_write(*buf, &privplaceholder, sizeof(privplaceholder));
   switch(update->type)
   {
   case UPDATE_FIELD:
@@ -76,6 +81,9 @@ struct update* social_update_new(struct user* user)
 {
   ++user->updatecount;
   user->updates=realloc(user->updates, sizeof(struct update)*user->updatecount);
+  user->updates[user->updatecount-1].privacy.flags=0;
+  user->updates[user->updatecount-1].privacy.circles=0;
+  user->updates[user->updatecount-1].privacy.circlecount=0;
   return &user->updates[user->updatecount-1];
 }
 
@@ -115,7 +123,7 @@ void social_update_save(struct user* user, struct update* update)
 // TODO: Is it bad to close and reopen a file in rapid succession? if it is maybe we should implement some kind of cache for cases where we're saving many updates fast, like receiving someone else's updates for the first time
 }
 
-static struct update* update_getfield(struct user* user, const char* name)
+struct update* social_update_getfield(struct user* user, const char* name)
 {
   unsigned int i;
   for(i=0; i<user->updatecount; ++i)
@@ -131,7 +139,7 @@ static struct update* update_getfield(struct user* user, const char* name)
   return ret;
 }
 
-static struct update* update_getfriend(struct user* user, uint32_t circle, const unsigned char id[20])
+struct update* social_update_getfriend(struct user* user, uint32_t circle, const unsigned char id[20])
 {
   unsigned int i;
   for(i=0; i<user->updatecount; ++i)
@@ -171,6 +179,16 @@ struct update* social_update_parse(struct user* user, void* data, unsigned int l
   readbin(data, len, &seq, sizeof(seq));
   readbin(data, len, &type, sizeof(type));
   readbin(data, len, &timestamp, sizeof(timestamp));
+  // Privacy settings
+  struct privacy privacy;
+  readbin(data, len, &privacy.flags, sizeof(privacy.flags));
+  readbin(data, len, &privacy.circlecount, sizeof(privacy.circlecount));
+  uint32_t privcircles[privacy.circlecount];
+  privacy.circles=privcircles;
+  readbin(data, len, privacy.circles, privacy.circlecount);
+  // Placeholder, potentially supporting lists of individuals in addition to circles
+  uint32_t privplaceholder;
+  readbin(data, len, &privplaceholder, sizeof(privplaceholder));
   // 2. Check sequence number uniqueness
   // NOTE: If instead of checking uniqueness we just checked if seq was higher than the user's previous seq: When relaying updates to a friend's friend a malicious peer could skip some entries, but pass along a more recent one, to effectively censor the earlier entries even when the author themself sends them at a later time. Hopefully it'll be enough that we probably get updates from multiple sources, so if one skips stuff we'll still get filled in by someone else
   unsigned int i;
@@ -199,7 +217,7 @@ struct update* social_update_parse(struct user* user, void* data, unsigned int l
     readbin(data, len, value, valuelen);
     value[valuelen]=0;
     // Erase/replace any old field with the same name if the sequence number is higher
-    update=update_getfield(user, name);
+    update=social_update_getfield(user, name);
     if(update->seq>seq){free(value); return 0;} // Old version
     free((void*)update->signature);
     free((void*)update->field.value);
@@ -233,7 +251,7 @@ struct update* social_update_parse(struct user* user, void* data, unsigned int l
     {
       social_user_addtocircle(user, circle, id);
     } // TODO: Removal
-    update=update_getfriend(user, circle, id);
+    update=social_update_getfriend(user, circle, id);
     if(update->seq>seq){return 0;} // Old version
     update->friends.add=add;
     }
@@ -247,5 +265,6 @@ struct update* social_update_parse(struct user* user, void* data, unsigned int l
   update->seq=seq;
   update->type=type;
   update->timestamp=timestamp;
+  privcpy(update->privacy, privacy);
   return update;
 }

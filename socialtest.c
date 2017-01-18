@@ -41,6 +41,7 @@ int main(int argc, char** argv)
 
   struct pollfd pfd[]={{.fd=0, .events=POLLIN, .revents=0}, {.fd=sock, .events=POLLIN, .revents=0}};
   char buf[1024];
+  struct privacy privacy={.flags=PRIVACY_FRIENDS, .circles=0, .circlecount=0};
   unsigned int i;
   while(1)
   {
@@ -111,7 +112,7 @@ int main(int argc, char** argv)
           if(r<1){break;}
           buf[len+r]=0;
         }
-        social_createpost(buf);
+        social_createpost(buf, &privacy);
       }
       else if(!strncmp(buf, "update field ", 13))
       {
@@ -120,11 +121,76 @@ int main(int argc, char** argv)
         printf("Enter value: "); fflush(stdout);
         unsigned int len=read(0, buf, 1023);
         buf[len]=0;
-        social_updatefield(name, buf);
+        social_updatefield(name, buf, &privacy);
       }
       else if(!strncmp(buf, "exportpeers ", 12))
       {
         peer_exportpeers(&buf[12]);
+      }
+      else if(!strcmp(buf, "lscircles"))
+      {
+        for(i=0; i<social_self->circlecount; ++i)
+        {
+          struct friendslist* circle=&social_self->circles[i];
+          printf("%u: %s (%u friends)\n", i, circle->name?circle->name:"Unnamed circle", circle->count);
+        }
+      }
+      else if(!strcmp(buf, "privacy"))
+      {
+        if(!privacy.flags)
+        {
+          printf("%u circles of friends can see updates with this setting:\n", privacy.circlecount);
+          for(i=0; i<privacy.circlecount; ++i)
+          {
+            if(privacy.circles[i]>=social_self->circlecount){printf("Undefined circle\n"); continue;}
+            struct friendslist* circle=&social_self->circles[privacy.circles[i]];
+            printf("%s (%u friends)\n", circle->name?circle->name:"Unnamed circle", circle->count);
+          }
+        }
+        else if(privacy.flags&PRIVACY_ANYONE)
+        {
+          printf("Anyone can see updates with this setting\n");
+        }
+        else if(privacy.flags&PRIVACY_FRIENDS)
+        {
+          printf("Friends in any circle can see updates with this setting\n");
+        }
+        else{printf("Unknown privacy flag set!\n");}
+      }
+      else if(!strncmp(buf, "privacy flag ", 13))
+      {
+        if(!strcmp(&buf[13], "anyone"))
+        {
+          privacy.flags^=PRIVACY_ANYONE;
+        }
+        else if(!strcmp(&buf[13], "friends"))
+        {
+          privacy.flags^=PRIVACY_FRIENDS;
+        }
+        else{printf("Unknown flag '%s'\n", &buf[13]);}
+      }
+      else if(!strncmp(buf, "privacy circle ", 15))
+      {
+        uint32_t circle=strtoul(&buf[15], 0, 0);
+        char found=0;
+        for(i=0; i<privacy.circlecount; ++i)
+        {
+          if(privacy.circles[i]==circle)
+          {
+            --privacy.circlecount;
+            memmove(&privacy.circles[i], &privacy.circles[i+1], sizeof(uint32_t)*(privacy.circlecount-i));
+            found=1;
+            printf("Removed\n");
+            break;
+          }
+        }
+        if(!found)
+        {
+          ++privacy.circlecount;
+          privacy.circles=realloc(privacy.circles, sizeof(uint32_t)*privacy.circlecount);
+          privacy.circles[privacy.circlecount-1]=circle;
+          printf("Added\n");
+        }
       }
       else{printf("Unknown command '%s'\n", buf);}
     }

@@ -33,7 +33,7 @@ struct update
   uint64_t seq; // Sequence of this update
   uint8_t type;
   uint64_t timestamp;
-// TODO: Privacy settings
+  struct privacy privacy;
   union
   {
     struct // I guess we let it be possible to have any kind of field
@@ -69,4 +69,6 @@ extern void social_update_write(struct buffer* buf, struct update* update);
 extern struct update* social_update_new(struct user* user);
 extern void social_update_sign(struct update* update);
 extern void social_update_save(struct user* user, struct update* update);
+extern struct update* social_update_getfield(struct user* user, const char* name);
+extern struct update* social_update_getfriend(struct user* user, uint32_t circle, const unsigned char id[20]);
 extern struct update* social_update_parse(struct user* user, void* data, unsigned int len); // Both for receiving updates and loading them from file
