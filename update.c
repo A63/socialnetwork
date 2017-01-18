@@ -73,6 +73,10 @@ void social_update_write(struct buffer* buf, struct update* update)
   case UPDATE_CIRCLE:
     buffer_write(*buf, &update->circle.circle, sizeof(update->circle.circle));
     buffer_writestr(*buf, update->circle.name);
+    buffer_write(*buf, &update->circle.privacy.flags, sizeof(update->circle.privacy.flags));
+    buffer_write(*buf, &update->circle.privacy.circlecount, sizeof(update->circle.privacy.circlecount));
+    buffer_write(*buf, update->circle.privacy.circles, update->circle.privacy.circlecount);
+    buffer_write(*buf, &privplaceholder, sizeof(privplaceholder));
     break;
   }
 }
@@ -132,6 +136,7 @@ struct update* social_update_getfield(struct user* user, const char* name)
     if(!strcmp(user->updates[i].field.name, name)){return &user->updates[i];}
   }
   struct update* ret=social_update_new(user);
+  ret->type=UPDATE_FIELD;
   ret->seq=0;
   ret->signature=0;
   ret->field.name=strdup(name);
@@ -149,10 +154,31 @@ struct update* social_update_getfriend(struct user* user, uint32_t circle, const
     if(!memcmp(user->updates[i].friends.id, id, 20)){return &user->updates[i];}
   }
   struct update* ret=social_update_new(user);
+  ret->type=UPDATE_FRIENDS;
   ret->seq=0;
   ret->signature=0;
   ret->friends.circle=circle;
   memcpy(ret->friends.id, id, 20);
+  return ret;
+}
+
+struct update* social_update_getcircle(struct user* user, uint32_t circle)
+{
+  unsigned int i;
+  for(i=0; i<user->updatecount; ++i)
+  {
+    if(user->updates[i].type!=UPDATE_CIRCLE){continue;}
+    if(user->updates[i].circle.circle==circle){return &user->updates[i];}
+  }
+  struct update* ret=social_update_new(user);
+  ret->type=UPDATE_CIRCLE;
+  ret->seq=0;
+  ret->signature=0;
+  ret->circle.circle=circle;
+  ret->circle.name=0;
+  ret->circle.privacy.flags=0;
+  ret->circle.privacy.circles=0;
+  ret->circle.privacy.circlecount=0;
   return ret;
 }
 
@@ -185,7 +211,7 @@ struct update* social_update_parse(struct user* user, void* data, unsigned int l
   readbin(data, len, &privacy.circlecount, sizeof(privacy.circlecount));
   uint32_t privcircles[privacy.circlecount];
   privacy.circles=privcircles;
-  readbin(data, len, privacy.circles, privacy.circlecount);
+  readbin(data, len, privacy.circles, sizeof(uint32_t)*privacy.circlecount);
   // Placeholder, potentially supporting lists of individuals in addition to circles
   uint32_t privplaceholder;
   readbin(data, len, &privplaceholder, sizeof(privplaceholder));
@@ -250,10 +276,37 @@ struct update* social_update_parse(struct user* user, void* data, unsigned int l
     if(add)
     {
       social_user_addtocircle(user, circle, id);
-    } // TODO: Removal
+    }else{
+      social_user_removefromcircle(user, circle, id);
+    }
     update=social_update_getfriend(user, circle, id);
     if(update->seq>seq){return 0;} // Old version
     update->friends.add=add;
+    }
+    break;
+  case UPDATE_CIRCLE:
+    {
+    uint32_t circle;
+    readbin(data, len, &circle, sizeof(circle));
+    uint32_t namelen;
+    readbin(data, len, &namelen, sizeof(namelen));
+    char name[namelen+1];
+    readbin(data, len, name, namelen);
+    name[namelen]=0;
+    struct privacy privacy;
+    readbin(data, len, &privacy.flags, sizeof(privacy.flags));
+    readbin(data, len, &privacy.circlecount, sizeof(privacy.circlecount));
+    uint32_t privcircles[privacy.circlecount];
+    privacy.circles=privcircles;
+    readbin(data, len, privacy.circles, sizeof(uint32_t)*privacy.circlecount);
+    struct friendslist* c=social_user_getcircle(user, circle);
+    free(c->name);
+    c->name=strdup(name);
+    privcpy(c->privacy, privacy);
+    update=social_update_getcircle(user, circle);
+    free((void*)update->circle.name);
+    update->circle.name=strdup(name);
+    privcpy(update->circle.privacy, privacy);
     }
     break;
   default: return 0;

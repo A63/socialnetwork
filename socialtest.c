@@ -26,6 +26,35 @@
 #include "social.h"
 #include "update.h"
 
+// Inject after "Will be shown/visible to ..."
+void printprivacy(struct privacy* privacy)
+{
+  if(!privacy->flags)
+  {
+    if(!privacy->circlecount){printf("no one"); return;}
+    printf("the circles ");
+    unsigned int usertotal=0;
+    unsigned int i;
+    for(i=0; i<privacy->circlecount; ++i)
+    {
+      if(i){printf(", ");}
+      struct friendslist* circle=social_user_getcircle(social_self, privacy->circles[i]);
+      printf("'%s'", circle->name?circle->name:"Unnamed circle");
+      usertotal+=circle->count;
+    }
+    printf(", %u users in total", usertotal);
+  }
+  else if(privacy->flags&PRIVACY_ANYONE)
+  {
+    printf("anyone");
+  }
+  else if(privacy->flags&PRIVACY_FRIENDS)
+  {
+    printf("all friends");
+  }
+  else{printf("unknown privacy flag set!");}
+}
+
 int main(int argc, char** argv)
 {
   int sock=socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
@@ -76,13 +105,21 @@ int main(int argc, char** argv)
         {
           struct update* update=&social_self->updates[i];
           time_t timestamp=update->timestamp;
+          printf("\nVisible to ");
+          printprivacy(&update->privacy);
           switch(update->type)
           {
           case UPDATE_FIELD:
-            printf("\nField %s%s = %s\n", ctime(&timestamp), update->field.name, update->field.value);
+            printf("\nField %s%s = %s", ctime(&timestamp), update->field.name, update->field.value);
             break;
           case UPDATE_POST:
-            printf("\nPost %s%s\n", ctime(&timestamp), update->post.message);
+            printf("\nPost %s%s", ctime(&timestamp), update->post.message);
+            break;
+          case UPDATE_FRIENDS:
+            printf("\nFriend %s%s\n", ctime(&timestamp), update->friends.add?"Add":"Remove");
+            break;
+          case UPDATE_CIRCLE:
+            printf("\nCircle %s%u: %s\n", ctime(&timestamp), update->circle.circle, update->circle.name);
             break;
           }
         }
@@ -132,30 +169,16 @@ int main(int argc, char** argv)
         for(i=0; i<social_self->circlecount; ++i)
         {
           struct friendslist* circle=&social_self->circles[i];
-          printf("%u: %s (%u friends)\n", i, circle->name?circle->name:"Unnamed circle", circle->count);
+          printf("%u: %s (%u friends), additions/removals are visible to ", i, circle->name?circle->name:"Unnamed circle", circle->count);
+          printprivacy(&circle->privacy);
+          printf("\n");
         }
       }
       else if(!strcmp(buf, "privacy"))
       {
-        if(!privacy.flags)
-        {
-          printf("%u circles of friends can see updates with this setting:\n", privacy.circlecount);
-          for(i=0; i<privacy.circlecount; ++i)
-          {
-            if(privacy.circles[i]>=social_self->circlecount){printf("Undefined circle\n"); continue;}
-            struct friendslist* circle=&social_self->circles[privacy.circles[i]];
-            printf("%s (%u friends)\n", circle->name?circle->name:"Unnamed circle", circle->count);
-          }
-        }
-        else if(privacy.flags&PRIVACY_ANYONE)
-        {
-          printf("Anyone can see updates with this setting\n");
-        }
-        else if(privacy.flags&PRIVACY_FRIENDS)
-        {
-          printf("Friends in any circle can see updates with this setting\n");
-        }
-        else{printf("Unknown privacy flag set!\n");}
+        printf("With this privacy setting updates will be visible to ");
+        printprivacy(&privacy);
+        printf("\n");
       }
       else if(!strncmp(buf, "privacy flag ", 13))
       {
@@ -191,6 +214,17 @@ int main(int argc, char** argv)
           privacy.circles[privacy.circlecount-1]=circle;
           printf("Added\n");
         }
+      }
+      else if(!strncmp(buf, "setcircle ", 10))
+      {
+        uint32_t circle=strtoul(&buf[10], 0, 0);
+        printf("Enter name: "); fflush(stdout);
+        unsigned int len=read(0, buf, 1023);
+        buf[len]=0;
+        char* end;
+        while((end=strchr(buf, '\r'))||(end=strchr(buf, '\n'))){end[0]=0;}
+        // Note: we're also setting the privacy setting that will be referenced for future friend additions/removals from this circle, which might not be readily apparent. The generated update that sets the name (and privacy) of the circle is always private.
+        social_setcircle(circle, buf, &privacy);
       }
       else{printf("Unknown command '%s'\n", buf);}
     }

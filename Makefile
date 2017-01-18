@@ -13,3 +13,6 @@ peertest: peertest.o peer.o udpstream.o
 
 udptest: udptest.o udpstream.o
 	$(CC) $^ -o $@
+
+clean:
+	rm -f *.o *.so socialtest peertest udptest

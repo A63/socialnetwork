@@ -207,7 +207,7 @@ void social_findfriends(void) // Call a second or so after init (once we have so
   }
 }
 
-static struct friendslist* user_getcircle(struct user* user, uint32_t circle)
+struct friendslist* social_user_getcircle(struct user* user, uint32_t circle)
 {
   if(circle>=user->circlecount)
   {
@@ -229,10 +229,27 @@ void social_user_addtocircle(struct user* user, uint32_t circle, const unsigned 
 {
   struct user* friend=social_finduser(id);
   if(!friend){friend=user_new(id);}
-  struct friendslist* c=user_getcircle(user, circle);
+  struct friendslist* c=social_user_getcircle(user, circle);
   ++c->count;
   c->friends=realloc(c->friends, sizeof(void*)*c->count);
   c->friends[c->count-1]=friend;
+}
+
+void social_user_removefromcircle(struct user* user, uint32_t circle, const unsigned char id[20])
+{
+  struct user* friend=social_finduser(id);
+  if(!friend){friend=user_new(id);}
+  struct friendslist* c=social_user_getcircle(user, circle);
+  unsigned int i;
+  for(i=0; i<c->count; ++i)
+  {
+    if(c->friends[i]==friend)
+    {
+      --c->count;
+      memmove(&c->friends[i], &c->friends[i+1], sizeof(void*)*(c->count-i));
+      // TODO: Garbage-collect users who are no longer friends of anyone we know?
+    }
+  }
 }
 
 void social_addfriend(const unsigned char id[20], uint32_t circle)
@@ -242,6 +259,7 @@ void social_addfriend(const unsigned char id[20], uint32_t circle)
   if(!friend->peer)
   {
     peer_findpeer(id);
+    // TODO: Request updates from any mutual friends we're connected to in the meantime
   }else{
     if(!friend->pubkey)
     {
@@ -260,10 +278,24 @@ void social_addfriend(const unsigned char id[20], uint32_t circle)
   struct update* update=social_update_getfriend(social_self, circle, id);
   ++social_self->seq;
   update->seq=social_self->seq;
-  update->type=UPDATE_FRIENDS;
   update->timestamp=time(0);
   privcpy(update->privacy, social_self->circles[circle].privacy);
   update->friends.add=1;
+  social_update_sign(update);
+  social_update_save(social_self, update);
+  social_shareupdate(update);
+}
+
+void social_removefriend(const unsigned char id[20], uint32_t circle)
+{
+  social_user_removefromcircle(social_self, circle, id);
+  struct update* update=social_update_getfriend(social_self, circle, id);
+  ++social_self->seq;
+  update->seq=social_self->seq;
+  update->type=UPDATE_FRIENDS;
+  update->timestamp=time(0);
+  privcpy(update->privacy, social_self->circles[circle].privacy);
+  update->friends.add=0;
   social_update_sign(update);
   social_update_save(social_self, update);
   social_shareupdate(update);
@@ -289,7 +321,6 @@ void social_updatefield(const char* name, const char* value, struct privacy* pri
   struct update* post=social_update_getfield(social_self, name);
   ++social_self->seq;
   post->seq=social_self->seq;
-  post->type=UPDATE_FIELD;
   post->timestamp=time(0);
   privcpy(post->privacy, *privacy);
   post->field.value=strdup(value);
@@ -352,4 +383,24 @@ char social_privacy_check(struct user* origin, struct privacy* privacy, struct u
     }
   }
   return 0;
+}
+
+void social_setcircle(uint32_t circle, const char* name, struct privacy* privacy)
+{
+  struct friendslist* c=social_user_getcircle(social_self, circle);
+  free(c->name);
+  c->name=strdup(name);
+  privcpy(c->privacy, *privacy);
+  // Private circle update
+  struct update* update=social_update_getcircle(social_self, circle);
+  free((void*)update->circle.name);
+  ++social_self->seq;
+  update->seq=social_self->seq;
+  update->timestamp=time(0);
+  // TODO: Is there any situation where we would want this update to be public?
+  update->circle.circle=circle;
+  update->circle.name=strdup(name);
+  privcpy(update->circle.privacy, *privacy);
+  social_update_sign(update);
+  social_update_save(social_self, update);
 }

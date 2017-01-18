@@ -58,11 +58,15 @@ extern struct user** social_users;
 extern unsigned int social_usercount;
 extern struct user* social_self; // Most things we need to keep track of for ourself are the same things we need to keep track of for others
 extern void social_init(const char* keypath);
+extern struct friendslist* social_user_getcircle(struct user* user, uint32_t circle);
 extern void social_user_addtocircle(struct user* user, uint32_t circle, const unsigned char id[20]);
+extern void social_user_removefromcircle(struct user* user, uint32_t circle, const unsigned char id[20]);
 extern void social_addfriend(const unsigned char id[20], uint32_t circle);
+extern void social_removefriend(const unsigned char id[20], uint32_t circle);
 extern void social_createpost(const char* msg, struct privacy* privacy);
 extern void social_updatefield(const char* name, const char* value, struct privacy* privacy);
 extern struct user* social_finduser(const unsigned char id[20]);
 extern void social_shareupdate(struct update* update);
 extern char social_privacy_check(struct user* origin, struct privacy* privacy, struct user* user);
+extern void social_setcircle(uint32_t circle, const char* name, struct privacy* privacy);
 #endif
