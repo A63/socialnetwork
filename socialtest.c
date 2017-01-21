@@ -65,7 +65,7 @@ int main(int argc, char** argv)
     bind(sock, ai->ai_addr, ai->ai_addrlen);
     freeaddrinfo(ai);
   }
-  social_init("priv.pem");
+  social_init("priv.pem", ".");
   peer_bootstrap(sock, "127.0.0.1:4000");
 
   struct pollfd pfd[]={{.fd=0, .events=POLLIN, .revents=0}, {.fd=sock, .events=POLLIN, .revents=0}};
