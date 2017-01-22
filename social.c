@@ -47,8 +47,9 @@ static void user_save(struct user* user)
 {
   if(!user->pubkey){return;}
   // TODO: Absolute path, something like $HOME/.socialnetwork
-  mkdir("users", 0700);
   char path[strlen(prefix)+strlen("/users/0")+40];
+  sprintf(path, "%s/users", prefix);
+  mkdir(path, 0700);
   sprintf(path, "%s/users/"PEERFMT, prefix, PEERARG(user->id));
   int f=open(path, O_WRONLY|O_CREAT|O_TRUNC, 0600);
   gnutls_datum_t key;
