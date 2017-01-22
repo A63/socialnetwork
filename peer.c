@@ -506,6 +506,7 @@ struct peer* peer_findbyid(const unsigned char id[20])
 
 void peer_exportpeers(const char* path)
 {
+  if(!peercount){return;}
   int f=open(path, O_WRONLY|O_CREAT|O_TRUNC, 0644);
   unsigned int i;
   for(i=0; i<peercount; ++i)
