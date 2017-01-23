@@ -109,9 +109,8 @@ void social_update_sign(struct update* update)
 
 void social_update_save(struct user* user, struct update* update)
 {
-  // TODO: Absolute path, something like $HOME/.socialnetwork
-  char path[strlen("updates/0")+40];
-  sprintf(path, "updates/"PEERFMT, PEERARG(user->id));
+  char path[strlen(social_prefix)+strlen("/updates/0")+40];
+  sprintf(path, "%s/updates/"PEERFMT, social_prefix, PEERARG(user->id));
   mkdirp(path);
   int f=open(path, O_WRONLY|O_CREAT|O_APPEND, 0600);
   struct buffer buf;

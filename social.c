@@ -28,7 +28,7 @@
 struct user** social_users=0;
 unsigned int social_usercount=0;
 struct user* social_self;
-static char* prefix=0;
+char* social_prefix=0;
 // Abstract away all the messagepassing and present information more or less statically
 // TODO: Think about privacy for all data updates
 // TODO: We must also sign all data updates to prevent forgeries
@@ -47,10 +47,10 @@ static void user_save(struct user* user)
 {
   if(!user->pubkey){return;}
   // TODO: Absolute path, something like $HOME/.socialnetwork
-  char path[strlen(prefix)+strlen("/users/0")+40];
-  sprintf(path, "%s/users", prefix);
+  char path[strlen(social_prefix)+strlen("/users/0")+40];
+  sprintf(path, "%s/users", social_prefix);
   mkdir(path, 0700);
-  sprintf(path, "%s/users/"PEERFMT, prefix, PEERARG(user->id));
+  sprintf(path, "%s/users/"PEERFMT, social_prefix, PEERARG(user->id));
   int f=open(path, O_WRONLY|O_CREAT|O_TRUNC, 0600);
   gnutls_datum_t key;
   gnutls_pubkey_export2(user->pubkey, GNUTLS_X509_FMT_PEM, &key);
@@ -67,8 +67,8 @@ static void user_load(struct user* user)
   // Load user data (only pubkey atm), but spare pubkey if it's already set
   if(!user->pubkey)
   {
-    char path[strlen(prefix)+strlen("/users/0")+40];
-    sprintf(path, "%s/users/"PEERFMT, prefix, PEERARG(user->id));
+    char path[strlen(social_prefix)+strlen("/users/0")+40];
+    sprintf(path, "%s/users/"PEERFMT, social_prefix, PEERARG(user->id));
     int f=open(path, O_RDONLY);
     if(f>=0)
     {
@@ -83,8 +83,8 @@ static void user_load(struct user* user)
     }
   }
   // Load updates
-  char path[strlen(prefix)+strlen("/updates/0")+40];
-  sprintf(path, "%s/updates/"PEERFMT, prefix, PEERARG(user->id));
+  char path[strlen(social_prefix)+strlen("/updates/0")+40];
+  sprintf(path, "%s/updates/"PEERFMT, social_prefix, PEERARG(user->id));
   int f=open(path, O_RDONLY);
   if(f<0){return;}
   uint64_t size;
@@ -180,8 +180,8 @@ static void sendupdates(struct peer* peer, void* data, unsigned int len)
 
 void social_init(const char* keypath, const char* pathprefix)
 {
-  free(prefix);
-  prefix=strdup(pathprefix);
+  free(social_prefix);
+  social_prefix=strdup(pathprefix);
   // Load key, friends, circles, etc. our own profile
   peer_init(keypath);
   social_self=user_new(peer_id);
