@@ -379,9 +379,11 @@ void peer_bootstrap(int sock, const char* peerlist)
     if(!(port=strchr(peer, ':'))){continue;} // Bogus entry
     port[0]=0;
     struct addrinfo* ai;
-    getaddrinfo(peer, &port[1], 0, &ai);
-    peer_new_unique(sock, ai->ai_addr, ai->ai_addrlen);
-    freeaddrinfo(ai);
+    if(!getaddrinfo(peer, &port[1], 0, &ai))
+    {
+      peer_new_unique(sock, ai->ai_addr, ai->ai_addrlen);
+      freeaddrinfo(ai);
+    }
   }
 }
 
