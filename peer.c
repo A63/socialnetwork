@@ -445,7 +445,7 @@ printf("Received command '%s' from peer "PEERFMT"\n", peer->cmdname, PEERARG(pee
   }
 }
 
-void peer_sendcmd(struct peer* peer, const char* cmd, void* data, uint32_t len)
+void peer_sendcmd(struct peer* peer, const char* cmd, const void* data, uint32_t len)
 {
   if(!peer) // Broadcast to all connected peers
   {

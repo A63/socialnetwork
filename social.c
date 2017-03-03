@@ -38,7 +38,11 @@ static void updateinfo(struct peer* peer, void* data, unsigned int len)
   // <id, 20><sigsize, 4><signature><seq, 8><type, 1><timestamp, 8><type-specific data>
   if(len<20){return;}
   struct user* user=social_finduser(data);
-  if(!user || !user->pubkey){return;}
+  if(!user || !user->pubkey)
+  {
+    if(user){peer_sendcmd(peer, "getpubkey", data, 20);}
+    return;
+  }
   struct update* update=social_update_parse(user, data+20, len-20);
   if(update){social_update_save(user, update);}
 }
@@ -46,7 +50,6 @@ static void updateinfo(struct peer* peer, void* data, unsigned int len)
 static void user_save(struct user* user)
 {
   if(!user->pubkey){return;}
-  // TODO: Absolute path, something like $HOME/.socialnetwork
   char path[strlen(social_prefix)+strlen("/users/0")+40];
   sprintf(path, "%s/users", social_prefix);
   mkdir(path, 0700);
@@ -63,7 +66,6 @@ static void user_save(struct user* user)
 
 static void user_load(struct user* user)
 {
-  // TODO: Absolute path, something like $HOME/.socialnetwork
   // Load user data (only pubkey atm), but spare pubkey if it's already set
   if(!user->pubkey)
   {
@@ -141,6 +143,14 @@ static void greetpeer(struct peer* peer, void* data, unsigned int len)
       peer_sendcmd(user->peer, "getupdates", arg, len);
     }
   }
+  // Ask peer if they have the pubkeys for any of our keyless users
+  for(i=0; i<social_usercount; ++i)
+  {
+    if(!social_users[i]->pubkey)
+    {
+      peer_sendcmd(peer, "getpubkey", social_users[i]->id, 20);
+    }
+  }
 }
 
 static void sendupdate(struct peer* peer, const unsigned char id[20], struct update* update)
@@ -178,6 +188,39 @@ static void sendupdates(struct peer* peer, void* data, unsigned int len)
   }
 }
 
+static void sendpubkey(struct peer* peer, void* data, unsigned int len)
+{ // Request for offline user's public key (note: only direct connections are asked, since only they would send updates anyway)
+  if(len!=20){return;}
+  struct user* user=social_finduser(data);
+  if(!user || !user->pubkey){return;}
+  // Export key
+  gnutls_datum_t key;
+  gnutls_pubkey_export2(user->pubkey, GNUTLS_X509_FMT_DER, &key);
+  // Send key (no need to send ID, receiver gets it from the key)
+  peer_sendcmd(peer, "pubkey", key.data, key.size);
+  gnutls_free(key.data);
+}
+
+static void receivepubkey(struct peer* peer, void* data, unsigned int len)
+{
+  // Import key and get its ID
+  gnutls_datum_t key={.data=data, .size=len};
+  gnutls_pubkey_t pubkey;
+  gnutls_pubkey_init(&pubkey);
+  gnutls_pubkey_import(pubkey, &key, GNUTLS_X509_FMT_DER);
+  unsigned char keyid[20];
+  size_t size=20;
+  gnutls_pubkey_get_key_id(pubkey, 0, keyid, &size);
+  // Find the matching user, if we know them
+  struct user* user=social_finduser(keyid);
+  if(!user || user->pubkey)
+  { // Abort if we don't know them, or if they already have a key
+    gnutls_pubkey_deinit(pubkey);
+    return;
+  }
+  user->pubkey=pubkey;
+}
+
 void social_init(const char* keypath, const char* pathprefix)
 {
   free(social_prefix);
@@ -197,6 +240,8 @@ void social_init(const char* keypath, const char* pathprefix)
   peer_registercmd("updateinfo", updateinfo);
   peer_registercmd("getpeers", greetpeer);
   peer_registercmd("getupdates", sendupdates);
+  peer_registercmd("getpubkey", sendpubkey);
+  peer_registercmd("pubkey", receivepubkey);
 // TODO: Set up socket and bootstrap here too? or accept an already set up socket to bootstrap?
 }
 
@@ -263,7 +308,8 @@ void social_addfriend(const unsigned char id[20], uint32_t circle)
   if(!friend->peer)
   {
     peer_findpeer(id);
-    // TODO: Request updates from any mutual friends we're connected to in the meantime
+    // Request updates from any mutual friends we're connected to in the meantime
+    peer_sendcmd(0, "getpubkey", id, 20);
   }else{
     if(!friend->pubkey)
     {
