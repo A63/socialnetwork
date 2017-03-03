@@ -98,7 +98,7 @@ void social_update_sign(struct update* update)
   social_update_write(&buf, update);
   gnutls_datum_t data={.data=buf.buf, .size=buf.size};
   gnutls_datum_t signature;
-  gnutls_privkey_sign_data(peer_privkey, GNUTLS_DIG_SHA1, 0, &data, &signature);
+  gnutls_privkey_sign_data(peer_privkey, GNUTLS_DIG_SHA256, 0, &data, &signature);
   buffer_deinit(buf);
   update->signaturesize=signature.size;
   void* sigbuf=malloc(signature.size);
@@ -200,7 +200,7 @@ struct update* social_update_parse(struct user* user, void* data, unsigned int l
   // 1. Verify signature
   gnutls_datum_t verifydata={.data=data, .size=len};
   gnutls_datum_t verifysig={.data=signature, .size=signaturesize};
-  if(gnutls_pubkey_verify_data2(user->pubkey, GNUTLS_SIGN_RSA_SHA1, 0, &verifydata, &verifysig)<0){return 0;} // Forgery
+  if(gnutls_pubkey_verify_data2(user->pubkey, GNUTLS_SIGN_RSA_SHA256, 0, &verifydata, &verifysig)<0){return 0;} // Forgery
   readbin(data, len, &seq, sizeof(seq));
   readbin(data, len, &type, sizeof(type));
   readbin(data, len, &timestamp, sizeof(timestamp));
