@@ -117,24 +117,33 @@ static struct user* user_new(const unsigned char id[20])
   return user;
 }
 
+static struct user* user_findfriend(struct user* user, const unsigned char id[20])
+{
+  unsigned int i, i2;
+  for(i=0; i<user->circlecount; ++i)
+  for(i2=0; i2<user->circles[i].count; ++i2)
+  {
+    struct user* user2=social_self->circles[i].friends[i2];
+    if(!memcmp(user2->id, id, 20)){return user2;}
+  }
+  return 0;
+}
+
 static void greetpeer(struct peer* peer, void* data, unsigned int len)
 {
-  // Figure out if they're one of our friends (TODO: or friends of friends)
-  unsigned int i, i2;
-  for(i=0; i<social_self->circlecount; ++i)
-  for(i2=0; i2<social_self->circles[i].count; ++i2)
+  // Figure out if they're one of our friends (or friends of friends)
+  struct user* user=social_finduser(peer->id);
+  if(user)
   {
-    struct user* user=social_self->circles[i].friends[i2];
-    if(!memcmp(user->id, peer->id, 20))
+    user->peer=peer;
+    if(!user->pubkey)
     {
-      user->peer=peer;
-// TODO: Better way of getting someone's public key (I guess this is fine, but we need to be able to get it when they're not online too)
-      if(!user->pubkey)
-      {
-        gnutls_pubkey_init(&user->pubkey);
-        gnutls_pubkey_import_x509(user->pubkey, peer->cert, 0);
-        user_save(user);
-      }
+      gnutls_pubkey_init(&user->pubkey);
+      gnutls_pubkey_import_x509(user->pubkey, peer->cert, 0);
+      user_save(user);
+    }
+    if(user_findfriend(social_self, peer->id)) // Friend of ours
+    {
       // Ask for updates
       len=20+sizeof(uint64_t);
       unsigned char arg[len];
@@ -142,8 +151,25 @@ static void greetpeer(struct peer* peer, void* data, unsigned int len)
       memcpy(arg+20, &user->seq, sizeof(user->seq));
       peer_sendcmd(user->peer, "getupdates", arg, len);
     }
+    // Check if they know any of our other friends who are not connected
+    unsigned int i, i2;
+    for(i=0; i<social_self->circlecount; ++i)
+    for(i2=0; i2<social_self->circles[i].count; ++i2)
+    {
+      struct user* friend=social_self->circles[i].friends[i2];
+      if(friend->peer){continue;}
+      if(user_findfriend(user, friend->id))
+      { // Friend of friend, ask for updates
+        len=20+sizeof(uint64_t);
+        unsigned char arg[len];
+        memcpy(arg, friend->id, 20);
+        memcpy(arg+20, &friend->seq, sizeof(friend->seq));
+        peer_sendcmd(peer, "getupdates", arg, len);
+      }
+    }
   }
   // Ask peer if they have the pubkeys for any of our keyless users
+  unsigned int i;
   for(i=0; i<social_usercount; ++i)
   {
     if(!social_users[i]->pubkey)
