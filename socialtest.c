@@ -172,6 +172,11 @@ int main(int argc, char** argv)
           printf("%u: %s (%u friends), additions/removals are visible to ", i, circle->name?circle->name:"Unnamed circle", circle->count);
           printprivacy(&circle->privacy);
           printf("\n");
+          unsigned int i2;
+          for(i2=0; i2<circle->count; ++i2)
+          {
+            printf("  "PEERFMT"\n", PEERARG(circle->friends[i2]->id));
+          }
         }
       }
       else if(!strcmp(buf, "privacy"))
