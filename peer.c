@@ -34,7 +34,7 @@ struct command
   void(*callback)(struct peer*,void*,unsigned int);
 };
 
-unsigned char peer_id[20];
+unsigned char peer_id[ID_SIZE];
 gnutls_privkey_t peer_privkey=0;
 static struct peer** peers=0;
 static unsigned int peercount=0;
@@ -127,32 +127,32 @@ printf("We now have %u peers\n", peercount);
 
 struct findpeer_request
 {
-  unsigned char id[20];
+  unsigned char id[ID_SIZE];
   struct sockaddr addr;
   uint16_t addrlen;
   time_t timestamp;
 };
 static void findpeer(struct peer* peer, void* data, unsigned int len)
 {
-  // <target ID, 20><ttl, 2>[<addrlen, 2><source addr>]
+  // <target ID, 32><ttl, 2>[<addrlen, 2><source addr>]
   // Sender can't know their own address, so the first recipient will need to add the address of whoever they got it from
   uint16_t ttl;
-  if(len<20+sizeof(ttl)){return;}
-  unsigned char id[20];
-  memcpy(id, data, 20);
+  if(len<ID_SIZE+sizeof(ttl)){return;}
+  unsigned char id[ID_SIZE];
+  memcpy(id, data, ID_SIZE);
 printf("Got findpeer request for '"PEERFMT"'\n", PEERARG(id));
-  memcpy(&ttl, data+20, sizeof(ttl));
+  memcpy(&ttl, data+ID_SIZE, sizeof(ttl));
   if(!ttl){return;}
   --ttl;
   struct sockaddr addr;
   uint16_t addrlen;
-  if(len>20+sizeof(ttl)+sizeof(addrlen))
+  if(len>ID_SIZE+sizeof(ttl)+sizeof(addrlen))
   { // Has address already
-    memcpy(&addrlen, data+20+sizeof(ttl), sizeof(addrlen));
-    if(len<20+sizeof(ttl)+sizeof(addrlen)+addrlen){return;}
-    memcpy(&addr, data+20+sizeof(ttl)+sizeof(addrlen), addrlen);
+    memcpy(&addrlen, data+ID_SIZE+sizeof(ttl), sizeof(addrlen));
+    if(len<ID_SIZE+sizeof(ttl)+sizeof(addrlen)+addrlen){return;}
+    memcpy(&addr, data+ID_SIZE+sizeof(ttl)+sizeof(addrlen), addrlen);
   }
-  else if(len==20+sizeof(ttl))
+  else if(len==ID_SIZE+sizeof(ttl))
   { // Get address from sender
     addrlen=peer->addrlen;
     memcpy(&addr, &peer->addr, addrlen);
@@ -169,7 +169,7 @@ printf("Got findpeer request for '"PEERFMT"'\n", PEERARG(id));
     {
       newentry=&reqs[i]; // Mark as replacable
     }
-    else if(!memcmp(reqs[i].id, id, 20) && reqs[i].addrlen==addrlen && !memcmp(&reqs[i].addr, &addr, addrlen))
+    else if(!memcmp(reqs[i].id, id, ID_SIZE) && reqs[i].addrlen==addrlen && !memcmp(&reqs[i].addr, &addr, addrlen))
     { // Already handled, update the timestamp too in case it keeps coming for a while
       reqs[i].timestamp=now;
       return;
@@ -181,12 +181,12 @@ printf("Got findpeer request for '"PEERFMT"'\n", PEERARG(id));
     reqs=realloc(reqs, sizeof(struct findpeer_request)*reqcount);
     newentry=&reqs[reqcount-1];
   }
-  memcpy(newentry->id, id, 20);
+  memcpy(newentry->id, id, ID_SIZE);
   memcpy(&newentry->addr, &addr, addrlen);
   newentry->addrlen=addrlen;
   newentry->timestamp=now;
   // Check if it's us
-  if(!memcmp(id, peer_id, 20))
+  if(!memcmp(id, peer_id, ID_SIZE))
   {
     peer_new_unique(udpstream_getsocket(peer->stream), &addr, addrlen);
     return;
@@ -194,12 +194,12 @@ printf("Got findpeer request for '"PEERFMT"'\n", PEERARG(id));
   // Propagate (unless it was us, !ttl, or already handled)
   if(ttl)
   {
-    len=20+sizeof(ttl)+sizeof(addrlen)+addrlen;
+    len=ID_SIZE+sizeof(ttl)+sizeof(addrlen)+addrlen;
     unsigned char data[len];
-    memcpy(data, id, 20);
-    memcpy(data+20, &ttl, sizeof(ttl));
-    memcpy(data+20+sizeof(ttl), &addrlen, sizeof(addrlen));
-    memcpy(data+20+sizeof(ttl)+sizeof(addrlen), &addr, addrlen);
+    memcpy(data, id, ID_SIZE);
+    memcpy(data+ID_SIZE, &ttl, sizeof(ttl));
+    memcpy(data+ID_SIZE+sizeof(ttl), &addrlen, sizeof(addrlen));
+    memcpy(data+ID_SIZE+sizeof(ttl)+sizeof(addrlen), &addr, addrlen);
     peer_sendcmd(0, "findpeer", data, len);
   }
 }
@@ -239,8 +239,8 @@ void peer_init(const char* keypath)
       close(f);
       gnutls_free(keydata.data);
     }
-    size_t size=20;
-    gnutls_x509_privkey_get_key_id(privkey, 0, peer_id, &size);
+    size_t size=ID_SIZE;
+    gnutls_x509_privkey_get_key_id(privkey, GNUTLS_KEYID_USE_SHA256, peer_id, &size);
     gnutls_privkey_init(&peer_privkey);
     gnutls_privkey_import_x509(peer_privkey, privkey, 0);
   }
@@ -268,10 +268,10 @@ static int checkcert(gnutls_session_t tls)
   gnutls_x509_crt_init(&peer->cert);
   gnutls_x509_crt_import(peer->cert, certs, GNUTLS_X509_FMT_DER);
   // Get the certificate's public key ID
-  size_t size=20;
-  gnutls_x509_crt_get_key_id(peer->cert, 0, peer->id, &size);
+  size_t size=ID_SIZE;
+  gnutls_x509_crt_get_key_id(peer->cert, GNUTLS_KEYID_USE_SHA256, peer->id, &size);
   // Make sure we're not connecting to ourselves. TODO: Make sure we're not connecting to someone else we're already connected to as well? (different addresses, same ID) may cause issues with reconnects and/or multiple sessions
-  return !memcmp(peer->id, peer_id, 20);
+  return !memcmp(peer->id, peer_id, ID_SIZE);
 }
 
 static void generatecert(gnutls_certificate_credentials_t cred)
@@ -314,7 +314,7 @@ struct peer* peer_new(struct udpstream* stream, char server)
   peer->datalength=-1;
   peer->addrlen=sizeof(peer->addr);
   udpstream_getaddr(stream, &peer->addr, &peer->addrlen);
-  memset(peer->id, 0, 20);
+  memset(peer->id, 0, ID_SIZE);
   peer->cert=0;
   gnutls_init(&peer->tls, (server?GNUTLS_SERVER:GNUTLS_CLIENT)|GNUTLS_NONBLOCK);
   // Priority
@@ -485,23 +485,23 @@ void peer_disconnect(struct peer* peer, char cleanly)
   }
 }
 
-void peer_findpeer(const unsigned char id[20])
+void peer_findpeer(const unsigned char id[ID_SIZE])
 {
   uint16_t ttl=8; // 8 is probably a good level to start at, might need to be higher in the future
-  unsigned int len=20+sizeof(ttl);
+  unsigned int len=ID_SIZE+sizeof(ttl);
   unsigned char data[len];
-  memcpy(data, id, 20);
-  memcpy(data+20, &ttl, sizeof(ttl));
+  memcpy(data, id, ID_SIZE);
+  memcpy(data+ID_SIZE, &ttl, sizeof(ttl));
   peer_sendcmd(0, "findpeer", data, len);
 }
 
-struct peer* peer_findbyid(const unsigned char id[20])
+struct peer* peer_findbyid(const unsigned char id[ID_SIZE])
 {
   unsigned int i;
   for(i=0; i<peercount; ++i)
   {
     if(!peers[i]->handshake){continue;}
-    if(!memcmp(peers[i]->id, id, 20)){return peers[i];}
+    if(!memcmp(peers[i]->id, id, ID_SIZE)){return peers[i];}
   }
   return 0;
 }

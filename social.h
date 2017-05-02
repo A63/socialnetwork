@@ -43,7 +43,7 @@ struct friendslist
 
 struct user
 {
-  unsigned char id[20];
+  unsigned char id[ID_SIZE];
   gnutls_pubkey_t pubkey;
   struct peer* peer;
   const char* name;
@@ -60,13 +60,13 @@ extern struct user* social_self; // Most things we need to keep track of for our
 extern char* social_prefix;
 extern void social_init(const char* keypath, const char* pathprefix);
 extern struct friendslist* social_user_getcircle(struct user* user, uint32_t circle);
-extern void social_user_addtocircle(struct user* user, uint32_t circle, const unsigned char id[20]);
-extern void social_user_removefromcircle(struct user* user, uint32_t circle, const unsigned char id[20]);
-extern void social_addfriend(const unsigned char id[20], uint32_t circle);
-extern void social_removefriend(const unsigned char id[20], uint32_t circle);
+extern void social_user_addtocircle(struct user* user, uint32_t circle, const unsigned char id[ID_SIZE]);
+extern void social_user_removefromcircle(struct user* user, uint32_t circle, const unsigned char id[ID_SIZE]);
+extern void social_addfriend(const unsigned char id[ID_SIZE], uint32_t circle);
+extern void social_removefriend(const unsigned char id[ID_SIZE], uint32_t circle);
 extern void social_createpost(const char* msg, struct privacy* privacy);
 extern void social_updatefield(const char* name, const char* value, struct privacy* privacy);
-extern struct user* social_finduser(const unsigned char id[20]);
+extern struct user* social_finduser(const unsigned char id[ID_SIZE]);
 extern void social_shareupdate(struct update* update);
 extern char social_privacy_check(struct user* origin, struct privacy* privacy, struct user* user);
 extern void social_setcircle(uint32_t circle, const char* name, struct privacy* privacy);

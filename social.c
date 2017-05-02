@@ -35,15 +35,15 @@ char* social_prefix=0;
 
 static void updateinfo(struct peer* peer, void* data, unsigned int len)
 {
-  // <id, 20><sigsize, 4><signature><seq, 8><type, 1><timestamp, 8><type-specific data>
-  if(len<20){return;}
+  // <id, 32><sigsize, 4><signature><seq, 8><type, 1><timestamp, 8><type-specific data>
+  if(len<ID_SIZE){return;}
   struct user* user=social_finduser(data);
   if(!user || !user->pubkey)
   {
-    if(user){peer_sendcmd(peer, "getpubkey", data, 20);}
+    if(user){peer_sendcmd(peer, "getpubkey", data, ID_SIZE);}
     return;
   }
-  struct update* update=social_update_parse(user, data+20, len-20);
+  struct update* update=social_update_parse(user, data+ID_SIZE, len-ID_SIZE);
   if(update){social_update_save(user, update);}
 }
 
@@ -98,10 +98,10 @@ static void user_load(struct user* user)
   }
 }
 
-static struct user* user_new(const unsigned char id[20])
+static struct user* user_new(const unsigned char id[ID_SIZE])
 {
   struct user* user=malloc(sizeof(struct user));
-  memcpy(user->id, id, 20);
+  memcpy(user->id, id, ID_SIZE);
   user->pubkey=0;
   user->peer=peer_findbyid(id);
   user->name=0;
@@ -117,14 +117,14 @@ static struct user* user_new(const unsigned char id[20])
   return user;
 }
 
-static struct user* user_findfriend(struct user* user, const unsigned char id[20])
+static struct user* user_findfriend(struct user* user, const unsigned char id[ID_SIZE])
 {
   unsigned int i, i2;
   for(i=0; i<user->circlecount; ++i)
   for(i2=0; i2<user->circles[i].count; ++i2)
   {
     struct user* user2=social_self->circles[i].friends[i2];
-    if(!memcmp(user2->id, id, 20)){return user2;}
+    if(!memcmp(user2->id, id, ID_SIZE)){return user2;}
   }
   return 0;
 }
@@ -145,10 +145,10 @@ static void greetpeer(struct peer* peer, void* data, unsigned int len)
     if(user_findfriend(social_self, peer->id)) // Friend of ours
     {
       // Ask for updates
-      len=20+sizeof(uint64_t);
+      len=ID_SIZE+sizeof(uint64_t);
       unsigned char arg[len];
-      memcpy(arg, user->id, 20);
-      memcpy(arg+20, &user->seq, sizeof(user->seq));
+      memcpy(arg, user->id, ID_SIZE);
+      memcpy(arg+ID_SIZE, &user->seq, sizeof(user->seq));
       peer_sendcmd(user->peer, "getupdates", arg, len);
     }
     // Check if they know any of our other friends who are not connected
@@ -160,10 +160,10 @@ static void greetpeer(struct peer* peer, void* data, unsigned int len)
       if(friend->peer){continue;}
       if(user_findfriend(user, friend->id))
       { // Friend of friend, ask for updates
-        len=20+sizeof(uint64_t);
+        len=ID_SIZE+sizeof(uint64_t);
         unsigned char arg[len];
-        memcpy(arg, friend->id, 20);
-        memcpy(arg+20, &friend->seq, sizeof(friend->seq));
+        memcpy(arg, friend->id, ID_SIZE);
+        memcpy(arg+ID_SIZE, &friend->seq, sizeof(friend->seq));
         peer_sendcmd(peer, "getupdates", arg, len);
       }
     }
@@ -174,16 +174,16 @@ static void greetpeer(struct peer* peer, void* data, unsigned int len)
   {
     if(!social_users[i]->pubkey)
     {
-      peer_sendcmd(peer, "getpubkey", social_users[i]->id, 20);
+      peer_sendcmd(peer, "getpubkey", social_users[i]->id, ID_SIZE);
     }
   }
 }
 
-static void sendupdate(struct peer* peer, const unsigned char id[20], struct update* update)
+static void sendupdate(struct peer* peer, const unsigned char id[ID_SIZE], struct update* update)
 {
   struct buffer buf;
   buffer_init(buf);
-  buffer_write(buf, id, 20);
+  buffer_write(buf, id, ID_SIZE);
   buffer_write(buf, &update->signaturesize, sizeof(update->signaturesize));
   buffer_write(buf, update->signature, update->signaturesize);
   social_update_write(&buf, update);
@@ -193,10 +193,10 @@ static void sendupdate(struct peer* peer, const unsigned char id[20], struct upd
 
 static void sendupdates(struct peer* peer, void* data, unsigned int len)
 {
-  // <ID, 20><seq, 8>
+  // <ID, 32><seq, 8>
   uint64_t seq;
-  if(len<20+sizeof(seq)){return;}
-  memcpy(&seq, data+20, sizeof(seq));
+  if(len<ID_SIZE+sizeof(seq)){return;}
+  memcpy(&seq, data+ID_SIZE, sizeof(seq));
   struct user* user;
   // "getupdates" can also be requests for data of friends of friends
   user=social_finduser(data);
@@ -216,7 +216,7 @@ static void sendupdates(struct peer* peer, void* data, unsigned int len)
 
 static void sendpubkey(struct peer* peer, void* data, unsigned int len)
 { // Request for offline user's public key (note: only direct connections are asked, since only they would send updates anyway)
-  if(len!=20){return;}
+  if(len!=ID_SIZE){return;}
   struct user* user=social_finduser(data);
   if(!user || !user->pubkey){return;}
   // Export key
@@ -234,8 +234,8 @@ static void receivepubkey(struct peer* peer, void* data, unsigned int len)
   gnutls_pubkey_t pubkey;
   gnutls_pubkey_init(&pubkey);
   gnutls_pubkey_import(pubkey, &key, GNUTLS_X509_FMT_DER);
-  unsigned char keyid[20];
-  size_t size=20;
+  unsigned char keyid[ID_SIZE];
+  size_t size=ID_SIZE;
   gnutls_pubkey_get_key_id(pubkey, 0, keyid, &size);
   // Find the matching user, if we know them
   struct user* user=social_finduser(keyid);
@@ -280,6 +280,7 @@ void social_findfriends(void) // Call a second or so after init (once we have so
     if(social_users[i]->peer){continue;}
     peer_findpeer(social_users[i]->id);
   }
+// TODO: Send out a "getupdates" for ourselves (to at least partially enable sharing just the privkey between devices)
 }
 
 struct friendslist* social_user_getcircle(struct user* user, uint32_t circle)
@@ -300,7 +301,7 @@ struct friendslist* social_user_getcircle(struct user* user, uint32_t circle)
   return &user->circles[circle];
 }
 
-void social_user_addtocircle(struct user* user, uint32_t circle, const unsigned char id[20])
+void social_user_addtocircle(struct user* user, uint32_t circle, const unsigned char id[ID_SIZE])
 {
   struct user* friend=social_finduser(id);
   if(!friend){friend=user_new(id);}
@@ -310,7 +311,7 @@ void social_user_addtocircle(struct user* user, uint32_t circle, const unsigned 
   c->friends[c->count-1]=friend;
 }
 
-void social_user_removefromcircle(struct user* user, uint32_t circle, const unsigned char id[20])
+void social_user_removefromcircle(struct user* user, uint32_t circle, const unsigned char id[ID_SIZE])
 {
   struct user* friend=social_finduser(id);
   if(!friend){friend=user_new(id);}
@@ -327,7 +328,7 @@ void social_user_removefromcircle(struct user* user, uint32_t circle, const unsi
   }
 }
 
-void social_addfriend(const unsigned char id[20], uint32_t circle)
+void social_addfriend(const unsigned char id[ID_SIZE], uint32_t circle)
 {
   struct user* friend=social_finduser(id);
   if(!friend){friend=user_new(id);}
@@ -335,7 +336,7 @@ void social_addfriend(const unsigned char id[20], uint32_t circle)
   {
     peer_findpeer(id);
     // Request updates from any mutual friends we're connected to in the meantime
-    peer_sendcmd(0, "getpubkey", id, 20);
+    peer_sendcmd(0, "getpubkey", id, ID_SIZE);
   }else{
     if(!friend->pubkey)
     {
@@ -343,10 +344,10 @@ void social_addfriend(const unsigned char id[20], uint32_t circle)
       gnutls_pubkey_import_x509(friend->pubkey, friend->peer->cert, 0);
       user_save(friend);
     }
-    unsigned int len=20+sizeof(uint64_t);
+    unsigned int len=ID_SIZE+sizeof(uint64_t);
     unsigned char arg[len];
-    memcpy(arg, friend->id, 20);
-    memcpy(arg+20, &friend->seq, sizeof(friend->seq));
+    memcpy(arg, friend->id, ID_SIZE);
+    memcpy(arg+ID_SIZE, &friend->seq, sizeof(friend->seq));
     peer_sendcmd(friend->peer, "getupdates", arg, len);
   }
   social_user_addtocircle(social_self, circle, id);
@@ -360,9 +361,13 @@ void social_addfriend(const unsigned char id[20], uint32_t circle)
   social_update_sign(update);
   social_update_save(social_self, update);
   social_shareupdate(update);
+// TODO: Send all old updates 'user' now has gained access to but won't request due to having a higher seq for us (updates visible only to this circle and other circles they're not in)
+//   Alternatively we could make the update requests include ranges of missing seqs? but that will make the getupdates request bloaty.
+//   The benefit of the second option would be not having to be connected directly to the user, but maybe something similar can be achieved by leaving messages with friends to deliver when they're seen (encrypted and signed) listing the now-visible seqs
+//     This would again require knowing their public key and not just ID.
 }
 
-void social_removefriend(const unsigned char id[20], uint32_t circle)
+void social_removefriend(const unsigned char id[ID_SIZE], uint32_t circle)
 {
   social_user_removefromcircle(social_self, circle, id);
   struct update* update=social_update_getfriend(social_self, circle, id);
@@ -405,12 +410,12 @@ void social_updatefield(const char* name, const char* value, struct privacy* pri
   social_shareupdate(post);
 }
 
-struct user* social_finduser(const unsigned char id[20])
+struct user* social_finduser(const unsigned char id[ID_SIZE])
 {
   unsigned int i;
   for(i=0; i<social_usercount; ++i)
   {
-    if(!memcmp(social_users[i]->id, id, 20)){return social_users[i];}
+    if(!memcmp(social_users[i]->id, id, ID_SIZE)){return social_users[i];}
   }
   return 0;
 }

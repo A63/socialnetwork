@@ -128,9 +128,9 @@ int main(int argc, char** argv)
       {
         if(strlen(&buf[10])<40){continue;}
         char byte[3]={0,0,0};
-        unsigned char binid[20];
+        unsigned char binid[ID_SIZE];
         unsigned int i;
-        for(i=0; i<20; ++i)
+        for(i=0; i<ID_SIZE; ++i)
         {
           memcpy(byte, &buf[10+i*2], 2);
           binid[i]=strtoul(byte, 0, 16);

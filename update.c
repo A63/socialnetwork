@@ -68,7 +68,7 @@ void social_update_write(struct buffer* buf, struct update* update)
   case UPDATE_FRIENDS:
     buffer_write(*buf, &update->friends.circle, sizeof(update->friends.circle));
     buffer_write(*buf, &update->friends.add, sizeof(update->friends.add));
-    buffer_write(*buf, update->friends.id, 20);
+    buffer_write(*buf, update->friends.id, ID_SIZE);
     break;
   case UPDATE_CIRCLE:
     buffer_write(*buf, &update->circle.circle, sizeof(update->circle.circle));
@@ -143,21 +143,21 @@ struct update* social_update_getfield(struct user* user, const char* name)
   return ret;
 }
 
-struct update* social_update_getfriend(struct user* user, uint32_t circle, const unsigned char id[20])
+struct update* social_update_getfriend(struct user* user, uint32_t circle, const unsigned char id[ID_SIZE])
 {
   unsigned int i;
   for(i=0; i<user->updatecount; ++i)
   {
     if(user->updates[i].type!=UPDATE_FRIENDS){continue;}
     if(user->updates[i].friends.circle!=circle){continue;}
-    if(!memcmp(user->updates[i].friends.id, id, 20)){return &user->updates[i];}
+    if(!memcmp(user->updates[i].friends.id, id, ID_SIZE)){return &user->updates[i];}
   }
   struct update* ret=social_update_new(user);
   ret->type=UPDATE_FRIENDS;
   ret->seq=0;
   ret->signature=0;
   ret->friends.circle=circle;
-  memcpy(ret->friends.id, id, 20);
+  memcpy(ret->friends.id, id, ID_SIZE);
   return ret;
 }
 
@@ -267,11 +267,11 @@ struct update* social_update_parse(struct user* user, void* data, unsigned int l
   case UPDATE_FRIENDS:
     {
     uint32_t circle;
-    unsigned char id[20];
+    unsigned char id[ID_SIZE];
     char add;
     readbin(data, len, &circle, sizeof(circle));
     readbin(data, len, &add, sizeof(add));
-    readbin(data, len, id, 20);
+    readbin(data, len, id, ID_SIZE);
     if(add)
     {
       social_user_addtocircle(user, circle, id);
