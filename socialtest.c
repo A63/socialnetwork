@@ -55,6 +55,18 @@ void printprivacy(struct privacy* privacy)
   else{printf("unknown privacy flag set!");}
 }
 
+struct user* finduser(const char* search) // Find user by just the beginnig (or whole) of the key ID
+{
+  unsigned int i;
+  for(i=0; i<social_usercount; ++i)
+  {
+    char id[ID_SIZE*2+1];
+    sprintf(id, PEERFMT, PEERARG(social_users[i]->id));
+    if(!strncmp(search, id, strlen(search))){return social_users[i];}
+  }
+  return 0;
+}
+
 int main(int argc, char** argv)
 {
   int sock=socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
@@ -98,12 +110,15 @@ int main(int argc, char** argv)
           }
         }
       }
-      else if(!strcmp(buf, "lsupdates")) // List our own updates for starters
+      else if(!strcmp(buf, "lsupdates") || // List our own updates for starters
+              !strncmp(buf, "lsupdates ", 10)) // List someone else's updates
       {
+        struct user* user=(buf[9]?finduser(&buf[10]):social_self);
+        if(!user){printf("User not found\n"); continue;}
         unsigned int i;
-        for(i=0; i<social_self->updatecount; ++i)
+        for(i=0; i<user->updatecount; ++i)
         {
-          struct update* update=&social_self->updates[i];
+          struct update* update=&user->updates[i];
           time_t timestamp=update->timestamp;
           printf("\nVisible to ");
           printprivacy(&update->privacy);
@@ -126,7 +141,7 @@ int main(int argc, char** argv)
       }
       else if(!strncmp(buf, "addfriend ", 10))
       {
-        if(strlen(&buf[10])<40){continue;}
+        if(strlen(&buf[10])<ID_SIZE*2){continue;}
         char byte[3]={0,0,0};
         unsigned char binid[ID_SIZE];
         unsigned int i;
