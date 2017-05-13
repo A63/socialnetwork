@@ -50,7 +50,7 @@ static void updateinfo(struct peer* peer, void* data, unsigned int len)
 static void user_save(struct user* user)
 {
   if(!user->pubkey){return;}
-  char path[strlen(social_prefix)+strlen("/users/0")+40];
+  char path[strlen(social_prefix)+strlen("/users/0")+ID_SIZE*2];
   sprintf(path, "%s/users", social_prefix);
   mkdir(path, 0700);
   sprintf(path, "%s/users/"PEERFMT, social_prefix, PEERARG(user->id));
@@ -69,7 +69,7 @@ static void user_load(struct user* user)
   // Load user data (only pubkey atm), but spare pubkey if it's already set
   if(!user->pubkey)
   {
-    char path[strlen(social_prefix)+strlen("/users/0")+40];
+    char path[strlen(social_prefix)+strlen("/users/0")+ID_SIZE*2];
     sprintf(path, "%s/users/"PEERFMT, social_prefix, PEERARG(user->id));
     int f=open(path, O_RDONLY);
     if(f>=0)
@@ -85,7 +85,7 @@ static void user_load(struct user* user)
     }
   }
   // Load updates
-  char path[strlen(social_prefix)+strlen("/updates/0")+40];
+  char path[strlen(social_prefix)+strlen("/updates/0")+ID_SIZE*2];
   sprintf(path, "%s/updates/"PEERFMT, social_prefix, PEERARG(user->id));
   int f=open(path, O_RDONLY);
   if(f<0){return;}

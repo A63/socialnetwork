@@ -109,7 +109,7 @@ void social_update_sign(struct update* update)
 
 void social_update_save(struct user* user, struct update* update)
 {
-  char path[strlen(social_prefix)+strlen("/updates/0")+40];
+  char path[strlen(social_prefix)+strlen("/updates/0")+ID_SIZE*2];
   sprintf(path, "%s/updates/"PEERFMT, social_prefix, PEERARG(user->id));
   mkdirp(path);
   int f=open(path, O_WRONLY|O_CREAT|O_APPEND, 0600);
