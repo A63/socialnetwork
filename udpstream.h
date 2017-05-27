@@ -23,6 +23,8 @@ struct udpstream;
 // Create a new stream on the given socket that sends and receives to/from the given address
 extern struct udpstream* udpstream_new(int sock, struct sockaddr* addr, socklen_t addrlen);
 
+extern struct udpstream* udpstream_find(struct sockaddr* addr, socklen_t addrlen);
+
 extern void udpstream_readsocket(int sock);
 
 // Check which (if any) streams have packets available to read

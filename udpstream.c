@@ -89,7 +89,7 @@ static struct udpstream* stream_new(int sock, struct sockaddr* addr, socklen_t a
   return stream;
 }
 
-static struct udpstream* stream_find(struct sockaddr* addr, socklen_t addrlen)
+struct udpstream* udpstream_find(struct sockaddr* addr, socklen_t addrlen)
 {
   unsigned int i;
   for(i=0; i<streamcount; ++i)
@@ -178,7 +178,7 @@ void udpstream_readsocket(int sock)
   struct sockaddr addr;
   socklen_t addrlen=sizeof(addr);
   ssize_t len=recvfrom(sock, buf, 1024, 0, &addr, &addrlen);
-  struct udpstream* stream=stream_find(&addr, addrlen);
+  struct udpstream* stream=udpstream_find(&addr, addrlen);
   if(!stream){stream=stream_new(sock, &addr, addrlen);}
   stream->buflen+=len;
   stream->buf=realloc(stream->buf, stream->buflen);
