@@ -49,7 +49,7 @@ struct packet
 struct udpstream
 {
   int sock;
-  struct sockaddr addr;
+  struct sockaddr_storage addr;
   socklen_t addrlen;
   uint16_t inseq;
   uint16_t outseq;
@@ -67,7 +67,7 @@ struct udpstream
 static struct udpstream** streams=0;
 static unsigned int streamcount=0;
 
-static struct udpstream* stream_new(int sock, struct sockaddr* addr, socklen_t addrlen)
+static struct udpstream* stream_new(int sock, struct sockaddr_storage* addr, socklen_t addrlen)
 {
   struct udpstream* stream=malloc(sizeof(struct udpstream));
   stream->sock=sock;
@@ -89,7 +89,7 @@ static struct udpstream* stream_new(int sock, struct sockaddr* addr, socklen_t a
   return stream;
 }
 
-struct udpstream* udpstream_find(struct sockaddr* addr, socklen_t addrlen)
+struct udpstream* udpstream_find(struct sockaddr_storage* addr, socklen_t addrlen)
 {
   unsigned int i;
   for(i=0; i<streamcount; ++i)
@@ -110,7 +110,7 @@ static ssize_t stream_send(struct udpstream* stream, uint8_t type, uint16_t seq,
   memcpy(packet+sizeof(uint32_t), &seq, sizeof(uint16_t));
   memcpy(packet+sizeof(uint32_t)+sizeof(uint16_t), &type, sizeof(uint8_t));
   memcpy(packet+HEADERSIZE, buf, size);
-  return sendto(stream->sock, packet, HEADERSIZE+size, 0, &stream->addr, stream->addrlen);
+  return sendto(stream->sock, packet, HEADERSIZE+size, 0, (struct sockaddr*)&stream->addr, stream->addrlen);
 }
 
 static void udpstream_requestresend(struct udpstream* stream, uint16_t seq)
@@ -163,7 +163,7 @@ static void stream_free(struct udpstream* stream)
   }
 }
 
-struct udpstream* udpstream_new(int sock, struct sockaddr* addr, socklen_t addrlen)
+struct udpstream* udpstream_new(int sock, struct sockaddr_storage* addr, socklen_t addrlen)
 {
   struct udpstream* stream=stream_new(sock, addr, addrlen);
   stream->state=STATE_INIT; // If we're creating the stream we're the ones initializing it
@@ -175,9 +175,9 @@ void udpstream_readsocket(int sock)
 {
   time_t now=time(0);
   char buf[1024];
-  struct sockaddr addr;
+  struct sockaddr_storage addr;
   socklen_t addrlen=sizeof(addr);
-  ssize_t len=recvfrom(sock, buf, 1024, 0, &addr, &addrlen);
+  ssize_t len=recvfrom(sock, buf, 1024, 0, (struct sockaddr*)&addr, &addrlen);
   struct udpstream* stream=udpstream_find(&addr, addrlen);
   if(!stream){stream=stream_new(sock, &addr, addrlen);}
   stream->buflen+=len;
@@ -370,7 +370,7 @@ ssize_t udpstream_write(struct udpstream* stream, const void* buf, size_t size)
   return size;
 }
 
-void udpstream_getaddr(struct udpstream* stream, struct sockaddr* addr, socklen_t* addrlen)
+void udpstream_getaddr(struct udpstream* stream, struct sockaddr_storage* addr, socklen_t* addrlen)
 {
   if(*addrlen>stream->addrlen){*addrlen=stream->addrlen;}
   memcpy(addr, &stream->addr, *addrlen);

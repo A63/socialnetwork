@@ -81,7 +81,7 @@ static void sendpeers(struct peer* peer, void* x, unsigned int len)
 struct peeritem
 {
   uint16_t addrlen;
-  struct sockaddr addr;
+  struct sockaddr_storage addr;
   uint16_t peercount;
 };
 static void getpeers(struct peer* peer, void* data, unsigned int len)
@@ -95,7 +95,7 @@ static void getpeers(struct peer* peer, void* data, unsigned int len)
   {
     memcpy(&addrlen, data, sizeof(addrlen));
     if(len<sizeof(addrlen)+addrlen+sizeof(pcount)){break;}
-    if(addrlen<=sizeof(struct sockaddr))
+    if(addrlen<=sizeof(struct sockaddr_storage))
     {
       ++pcount;
       peers=realloc(peers, sizeof(struct peeritem)*pcount);
@@ -128,7 +128,7 @@ printf("We now have %u peers\n", peercount);
 struct findpeer_request
 {
   unsigned char id[ID_SIZE];
-  struct sockaddr addr;
+  struct sockaddr_storage addr;
   uint16_t addrlen;
   time_t timestamp;
 };
@@ -144,7 +144,7 @@ printf("Got findpeer request for '"PEERFMT"'\n", PEERARG(id));
   memcpy(&ttl, data+ID_SIZE, sizeof(ttl));
   if(!ttl){return;}
   --ttl;
-  struct sockaddr addr;
+  struct sockaddr_storage addr;
   uint16_t addrlen;
   if(len>ID_SIZE+sizeof(ttl)+sizeof(addrlen))
   { // Has address already
@@ -350,7 +350,7 @@ struct peer* peer_get(struct udpstream* stream)
   return peer_new(stream, 1);
 }
 
-struct peer* peer_new_unique(int sock, struct sockaddr* addr, socklen_t addrlen)
+struct peer* peer_new_unique(int sock, struct sockaddr_storage* addr, socklen_t addrlen)
 {
   unsigned int i;
   // Make sure we're not already connected to this peer
@@ -376,12 +376,20 @@ void peer_bootstrap(int sock, const char* peerlist)
     entry=(end[0]?&end[1]:0);
     char* port;
     if((port=strchr(peer, '\r'))){port[0]=0;}
-    if(!(port=strchr(peer, ':'))){continue;} // Bogus entry
+    if(!(port=strrchr(peer, ':'))){continue;} // Bogus entry
     port[0]=0;
-    struct addrinfo* ai;
-    if(!getaddrinfo(peer, &port[1], 0, &ai))
+    // Strip [ and ] (IPv6)
+    char* host=peer;
+    if(host[0]=='[')
     {
-      peer_new_unique(sock, ai->ai_addr, ai->ai_addrlen);
+      host=&host[1];
+      char* end=strchr(host, ']');
+      if(end){end[0]=0;}
+    }
+    struct addrinfo* ai;
+    if(!getaddrinfo(host, &port[1], 0, &ai))
+    {
+      peer_new_unique(sock, (struct sockaddr_storage*)ai->ai_addr, ai->ai_addrlen);
       freeaddrinfo(ai);
     }
   }
@@ -514,15 +522,11 @@ void peer_exportpeers(const char* path)
   for(i=0; i<peercount; ++i)
   {
     if(!peers[i]->handshake){continue;} // Skip bad peers
-    switch(peers[i]->addr.sa_family)
-    {
-    case AF_INET:
-      {
-      struct sockaddr_in* addr=(struct sockaddr_in*)&peers[i]->addr;
-      unsigned char* ip=(unsigned char*)&addr->sin_addr.s_addr;
-      dprintf(f, "%hhu.%hhu.%hhu.%hhu:%hu\n", ip[0], ip[1], ip[2], ip[3], ntohs(addr->sin_port));
-      }
-    }
+    char addr[INET6_ADDRSTRLEN];
+    char port[64];
+    if(getnameinfo((struct sockaddr*)&peers[i]->addr, peers[i]->addrlen, addr, INET6_ADDRSTRLEN, port, 64, NI_NUMERICHOST|NI_NUMERICSERV|NI_DGRAM)){continue;}
+    const char* fmt=((peers[i]->addr.ss_family==AF_INET6)?"[%s]:%s":"%s:%s");
+    dprintf(f, fmt, addr, port);
   }
   close(f);
 }

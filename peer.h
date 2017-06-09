@@ -28,7 +28,7 @@ struct peer
   uint8_t cmdlength;
   char* cmdname;
   int32_t datalength;
-  struct sockaddr addr;
+  struct sockaddr_storage addr;
   socklen_t addrlen;
   unsigned char id[ID_SIZE]; // SHA2-256 sum of public key (binary)
   gnutls_x509_crt_t cert;
@@ -44,7 +44,7 @@ extern void peer_registercmd(const char* name, void(*callback)(struct peer*,void
 extern void peer_init(const char* keypath);
 extern struct peer* peer_new(struct udpstream* stream, char server);
 extern struct peer* peer_get(struct udpstream* stream);
-extern struct peer* peer_new_unique(int sock, struct sockaddr* addr, socklen_t addrlen);
+extern struct peer* peer_new_unique(int sock, struct sockaddr_storage* addr, socklen_t addrlen);
 extern void peer_bootstrap(int sock, const char* peerlist);
 extern void peer_handlesocket(int sock); // Incoming data
 extern void peer_sendcmd(struct peer* peer, const char* cmd, const void* data, uint32_t len);

@@ -21,9 +21,9 @@
 struct udpstream;
 
 // Create a new stream on the given socket that sends and receives to/from the given address
-extern struct udpstream* udpstream_new(int sock, struct sockaddr* addr, socklen_t addrlen);
+extern struct udpstream* udpstream_new(int sock, struct sockaddr_storage* addr, socklen_t addrlen);
 
-extern struct udpstream* udpstream_find(struct sockaddr* addr, socklen_t addrlen);
+extern struct udpstream* udpstream_find(struct sockaddr_storage* addr, socklen_t addrlen);
 
 extern void udpstream_readsocket(int sock);
 
@@ -35,7 +35,7 @@ extern ssize_t udpstream_read(struct udpstream* stream, void* buf, size_t size);
 extern ssize_t udpstream_write(struct udpstream* stream, const void* buf, size_t size);
 
 // Get the network address of a stream's peer (useful for UDP-punchthrough)
-extern void udpstream_getaddr(struct udpstream* stream, struct sockaddr* addr, socklen_t* addrlen);
+extern void udpstream_getaddr(struct udpstream* stream, struct sockaddr_storage* addr, socklen_t* addrlen);
 
 extern int udpstream_getsocket(struct udpstream* stream);
 
