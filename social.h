@@ -17,6 +17,7 @@
 #ifndef SOCIAL_H
 #define SOCIAL_H
 #include <stdint.h>
+#include "peer.h"
 #define PRIVACY_ANYONE  1
 #define PRIVACY_FRIENDS 2
 struct privacy

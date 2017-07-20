@@ -14,6 +14,8 @@
     You should have received a copy of the GNU Affero General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+#ifndef PEER_H
+#define PEER_H
 #include <stdint.h>
 #include <gnutls/gnutls.h>
 #include "udpstream.h"
@@ -52,3 +54,4 @@ extern void peer_disconnect(struct peer* peer, char cleanly);
 extern void peer_findpeer(const unsigned char id[ID_SIZE]); // Find and ask a peer to connect to us
 extern struct peer* peer_findbyid(const unsigned char id[ID_SIZE]);
 extern void peer_exportpeers(const char* path);
+#endif
