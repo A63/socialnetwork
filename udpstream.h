@@ -14,6 +14,13 @@
     You should have received a copy of the GNU Affero General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+/**
+* SECTION:udpstream
+* @title: UDP stream
+* @short_description: Connection-oriented reliable UDP
+*
+* Connection-oriented reliable transfer protocol operating over UDP
+*/
 #ifndef UDPSTREAM_H
 #define UDPSTREAM_H
 #include <sys/socket.h>

@@ -14,6 +14,13 @@
     You should have received a copy of the GNU Affero General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+/**
+* SECTION:peer
+* @title: Peer
+* @short_description: Handles peering and secure communication between peers
+*
+* Handles peering and secure communication between peers
+*/
 #ifndef PEER_H
 #define PEER_H
 #include <stdint.h>

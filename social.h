@@ -14,6 +14,13 @@
     You should have received a copy of the GNU Affero General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+/**
+* SECTION:social
+* @title: Social
+* @short_description: High-level social functions
+*
+* High-level social functions
+*/
 #ifndef SOCIAL_H
 #define SOCIAL_H
 #include <stdint.h>
@@ -59,16 +66,38 @@ extern struct user** social_users;
 extern unsigned int social_usercount;
 extern struct user* social_self; // Most things we need to keep track of for ourself are the same things we need to keep track of for others
 extern char* social_prefix;
+/**
+* social_init:
+* @keypath: Path to the private key file used as one's identity
+* @pathprefix: Prefix in which to store various data (updates, public keys)
+*
+* Initialize libsocial with an account/key
+*/
 extern void social_init(const char* keypath, const char* pathprefix);
 extern struct friendslist* social_user_getcircle(struct user* user, uint32_t circle);
 extern void social_user_addtocircle(struct user* user, uint32_t circle, const unsigned char id[ID_SIZE]);
 extern void social_user_removefromcircle(struct user* user, uint32_t circle, const unsigned char id[ID_SIZE]);
 extern void social_addfriend(const unsigned char id[ID_SIZE], uint32_t circle);
 extern void social_removefriend(const unsigned char id[ID_SIZE], uint32_t circle);
+/**
+* social_createpost:
+* @msg: Message to post
+* @privacy: Privacy setting for the update
+*
+* Creates a post update
+*/
 extern void social_createpost(const char* msg, struct privacy* privacy);
 extern void social_updatefield(const char* name, const char* value, struct privacy* privacy);
 extern struct user* social_finduser(const unsigned char id[ID_SIZE]);
 extern void social_shareupdate(struct update* update);
 extern char social_privacy_check(struct user* origin, struct privacy* privacy, struct user* user);
+/**
+* social_setcircle:
+* @circle: Circle ID
+* @name: New name for the circle
+* @privacy: Circle privacy, determines who can see friends in this circle
+*
+* Set properties for a given circle ID
+*/
 extern void social_setcircle(uint32_t circle, const char* name, struct privacy* privacy);
 #endif

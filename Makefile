@@ -36,5 +36,11 @@ peertest: peertest.o peer.o udpstream.o
 udptest: udptest.o udpstream.o
 	$(CC) $^ -o $@
 
+docs:
+	mkdir -p Documentation/api/html
+	gtkdoc-scan --module=socialnetwork --output-dir=Documentation/api --source-dir=. --rebuild-sections
+	cd Documentation/api && gtkdoc-mkdb --module=socialnetwork --output-format=XML --source-dir=../..
+	cd Documentation/api/html && gtkdoc-mkhtml socialnetwork ../socialnetwork-docs.xml
+
 clean:
 	rm -f *.o *.so socialtest peertest udptest *.pc
