@@ -1,5 +1,5 @@
 LIBS=$(shell pkg-config --libs gnutls)
-CFLAGS=-g3 -Wall $(shell pkg-config --cflags gnutls)
+CFLAGS=-g3 -Wall -Wextra $(shell pkg-config --cflags gnutls)
 PREFIX=/usr
 
 all: socialtest libsocial.so libsocial.pc

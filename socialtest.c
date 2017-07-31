@@ -139,6 +139,13 @@ int main(int argc, char** argv)
           }
         }
       }
+      else if(!strcmp(buf, "loadmore") || // Load more of our own updates
+              !strncmp(buf, "loadmore ", 9)) // Load more of someone else's updates
+      {
+        struct user* user=(buf[8]?finduser(&buf[9]):social_self);
+        if(!user){printf("User not found\n"); continue;}
+        social_user_loadmore(user);
+      }
       else if(!strncmp(buf, "addfriend ", 10))
       {
         if(strlen(&buf[10])<ID_SIZE*2){continue;}

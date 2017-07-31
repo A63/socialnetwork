@@ -109,8 +109,11 @@ void social_update_sign(struct update* update)
 
 void social_update_save(struct user* user, struct update* update)
 {
-  char path[strlen(social_prefix)+strlen("/updates/0")+ID_SIZE*2];
-  sprintf(path, "%s/updates/"PEERFMT, social_prefix, PEERARG(user->id));
+  // Based on update type consider some updates "sticky", e.g. fields, friends, media (just the metadata, hash+name+size)
+  // and save them to an alternative, non-rotated updates file
+  char sticky=(update->type==UPDATE_FIELD || update->type==UPDATE_MEDIA || update->type==UPDATE_FRIENDS);
+  char path[strlen(social_prefix)+strlen("/updates/.sticky0")+ID_SIZE*2];
+  sprintf(path, "%s/updates/"PEERFMT"%s", social_prefix, PEERARG(user->id), sticky?".sticky":"");
   mkdirp(path);
   int f=open(path, O_WRONLY|O_CREAT|O_APPEND, 0600);
   struct buffer buf;
@@ -122,6 +125,12 @@ void social_update_save(struct user* user, struct update* update)
   write(f, update->signature, update->signaturesize);
   write(f, buf.buf, buf.size);
   buffer_deinit(buf);
+  // Check position of f and rotate if it's large (100kb), and non-sticky
+  // TODO: Make the 100kb limit configurable
+  if(!sticky && lseek(f, 0, SEEK_CUR)>100*1024)
+  {
+    social_update_rotate(user);
+  }
   close(f);
 // TODO: Is it bad to close and reopen a file in rapid succession? if it is maybe we should implement some kind of cache for cases where we're saving many updates fast, like receiving someone else's updates for the first time
 }
@@ -319,4 +328,20 @@ struct update* social_update_parse(struct user* user, void* data, unsigned int l
   update->timestamp=timestamp;
   privcpy(update->privacy, privacy);
   return update;
+}
+
+void social_update_rotate(struct user* user)
+{
+  unsigned int i;
+  for(i=user->rotationcount+1; i>0; --i)
+  {
+    #define FMT "%s/updates/"PEERFMT".%u"
+    char oldname[snprintf(0,0, FMT, social_prefix, PEERARG(user->id), i-1)+1];
+    sprintf(oldname, (i>1)?FMT:"%s/updates/"PEERFMT, social_prefix, PEERARG(user->id), i-1);
+    char newname[snprintf(0,0, FMT, social_prefix, PEERARG(user->id), i)+1];
+    sprintf(newname, FMT, social_prefix, PEERARG(user->id), i);
+    if(rename(oldname, newname)){perror("rename(social_update_rotate)");}
+  }
+  ++user->rotationcount;
+  ++user->rotation; // By rotating updates we're also shifting which number we're currently on
 }

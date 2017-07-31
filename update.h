@@ -81,3 +81,10 @@ extern struct update* social_update_getfield(struct user* user, const char* name
 extern struct update* social_update_getfriend(struct user* user, uint32_t circle, const unsigned char id[ID_SIZE]);
 extern struct update* social_update_getcircle(struct user* user, uint32_t circle);
 extern struct update* social_update_parse(struct user* user, void* data, unsigned int len); // Both for receiving updates and loading them from file
+/**
+* social_update_rotate:
+* @user: User to rotate updates for
+*
+* Rotate update files so that we can load older updates only when we want them
+*/
+extern void social_update_rotate(struct user* user);

@@ -49,17 +49,33 @@ struct friendslist
   unsigned int count;
 };
 
+/**
+* user:
+* @id: Peer ID
+* @pubkey: Public key
+* @peer: Peer structure, or NULL if they are not connected
+* @circles: Friend circles
+* @circlecount: Number of friend circles
+* @seq: Sequence number of the last received (and confirmed) update
+* @updates: Updates
+* @updatecount: Number of updates
+* @rotation: Current number of rotating update files loaded
+* @rotationcount: Total number of rotating update files for this user
+*
+* User structure, keeps track of updates, public keys, peer if connected, etc.
+*/
 struct user
 {
   unsigned char id[ID_SIZE];
   gnutls_pubkey_t pubkey;
   struct peer* peer;
-  const char* name;
   struct friendslist* circles;
   unsigned int circlecount;
   uint64_t seq; // Sequence of updates we have from this user. 64 bits should be enough for a lifetime of updates (18446744073709551616 updates, enough to update 584 times per millisecond for a million years)
   struct update* updates;
   unsigned int updatecount;
+  unsigned int rotation;
+  unsigned int rotationcount;
 };
 
 extern struct user** social_users;
@@ -77,6 +93,14 @@ extern void social_init(const char* keypath, const char* pathprefix);
 extern struct friendslist* social_user_getcircle(struct user* user, uint32_t circle);
 extern void social_user_addtocircle(struct user* user, uint32_t circle, const unsigned char id[ID_SIZE]);
 extern void social_user_removefromcircle(struct user* user, uint32_t circle, const unsigned char id[ID_SIZE]);
+/**
+* social_user_loadmore:
+* @user: User to load more updates for
+*
+* Load more updates for a user from the filesystem
+* Returns: The number of additional updates loaded (will be 0 when there is nothing more to load)
+*/
+extern unsigned int social_user_loadmore(struct user* user);
 extern void social_addfriend(const unsigned char id[ID_SIZE], uint32_t circle);
 extern void social_removefriend(const unsigned char id[ID_SIZE], uint32_t circle);
 /**

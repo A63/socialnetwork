@@ -64,9 +64,24 @@ static void user_save(struct user* user)
   close(f);
 }
 
+static void user_loadfrom(struct user* user, const char* suffix)
+{
+  char path[strlen(social_prefix)+strlen("/updates/0")+ID_SIZE*2+strlen(suffix)];
+  sprintf(path, "%s/updates/"PEERFMT"%s", social_prefix, PEERARG(user->id), suffix);
+  int f=open(path, O_RDONLY);
+  if(f<0){return;}
+  uint64_t size;
+  while(read(f, &size, sizeof(size))==sizeof(size))
+  {
+    uint8_t buf[size];
+    read(f, buf, size);
+    social_update_parse(user, buf, size);
+  }
+}
+
 static void user_load(struct user* user)
 {
-  // Load user data (only pubkey atm), but spare pubkey if it's already set
+  // Load public key if it isn't already set
   if(!user->pubkey)
   {
     char path[strlen(social_prefix)+strlen("/users/0")+ID_SIZE*2];
@@ -84,18 +99,18 @@ static void user_load(struct user* user)
       gnutls_pubkey_import(user->pubkey, &key, GNUTLS_X509_FMT_PEM);
     }
   }
-  // Load updates
-  char path[strlen(social_prefix)+strlen("/updates/0")+ID_SIZE*2];
-  sprintf(path, "%s/updates/"PEERFMT, social_prefix, PEERARG(user->id));
-  int f=open(path, O_RDONLY);
-  if(f<0){return;}
-  uint64_t size;
-  while(read(f, &size, sizeof(size))==sizeof(size))
+  // Load updates (sticky and unrotated)
+  user_loadfrom(user, ".sticky");
+  user_loadfrom(user, "");
+  // Count the number of rotated updates we have for the user (updates which we don't load here but can be loaded with social_user_loadmore() on demand)
+  unsigned int i;
+  for(i=0; i<UINT_MAX; ++i)
   {
-    uint8_t buf[size];
-    read(f, buf, size);
-    social_update_parse(user, buf, size);
+    char path[snprintf(0,0, "%s/updates/"PEERFMT".%u", social_prefix, PEERARG(user->id), i+1)+1];
+    sprintf(path, "%s/updates/"PEERFMT".%u", social_prefix, PEERARG(user->id), i+1);
+    if(access(path, F_OK)){break;}
   }
+  user->rotationcount=i;
 }
 
 static struct user* user_new(const unsigned char id[ID_SIZE])
@@ -104,12 +119,13 @@ static struct user* user_new(const unsigned char id[ID_SIZE])
   memcpy(user->id, id, ID_SIZE);
   user->pubkey=0;
   user->peer=peer_findbyid(id);
-  user->name=0;
   user->circles=0;
   user->circlecount=0;
   user->seq=0;
   user->updates=0;
   user->updatecount=0;
+  user->rotation=0;
+  user->rotationcount=0;
   ++social_usercount;
   social_users=realloc(social_users, sizeof(void*)*social_usercount);
   social_users[social_usercount-1]=user;
@@ -326,6 +342,17 @@ void social_user_removefromcircle(struct user* user, uint32_t circle, const unsi
       // TODO: Garbage-collect users who are no longer friends of anyone we know?
     }
   }
+}
+
+unsigned int social_user_loadmore(struct user* user)
+{
+  if(user->rotation==user->rotationcount){return 0;} // Already loaded all updates
+  unsigned int oldcount=user->updatecount;
+  ++user->rotation;
+  char buf[snprintf(0,0,".%u", user->rotation)+1];
+  sprintf(buf, ".%u", user->rotation);
+  user_loadfrom(user, buf);
+  return user->updatecount-oldcount;
 }
 
 void social_addfriend(const unsigned char id[ID_SIZE], uint32_t circle)
