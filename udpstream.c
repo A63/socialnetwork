@@ -333,7 +333,7 @@ ssize_t udpstream_read(struct udpstream* stream, void* buf, size_t size)
   {
     if(stream->recvpackets[i].seq==stream->inseq)
     {
-      ssize_t len=stream->recvpackets[i].buflen;
+      size_t len=stream->recvpackets[i].buflen;
       if(len>size) // Handle buffers smaller than the payload
       {
         memcpy(buf, stream->recvpackets[i].buf, size);

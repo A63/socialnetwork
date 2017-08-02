@@ -95,15 +95,15 @@ int main(int argc, char** argv)
       ssize_t len=read(0, buf, 1023);
       while(len>0 && strchr("\r\n", buf[len-1])){--len;}
       buf[len]=0;
-      if(!strcmp(buf, "lsfriends")) // TODO: These aren't necessarily friends
+      if(!strcmp(buf, "lsfriends")) // TODO: These aren't necessarily friends, just users we are somehow connected to
       {
         for(i=0; i<social_usercount; ++i)
         {
-          printf("%p %s\n", social_users[i], social_users[i]->peer?"(connected)":"");
+          printf("%p (%s) %s\n", social_users[i], social_user_getfield(social_users[i], "name"), social_users[i]->peer?"(connected)":"");
           unsigned int i2;
           for(i2=0; i2<social_users[i]->updatecount; ++i2)
           {
-            if(social_users[i]->updates[i2].type==UPDATE_FIELD)
+            if(social_users[i]->updates[i2].type==UPDATE_FIELD && strcmp(social_users[i]->updates[i2].field.name, "name"))
             {
               printf("  %s = %s", social_users[i]->updates[i2].field.name, social_users[i]->updates[i2].field.value);
             }
@@ -179,6 +179,7 @@ int main(int argc, char** argv)
         strcpy(name, &buf[13]);
         printf("Enter value: "); fflush(stdout);
         unsigned int len=read(0, buf, 1023);
+        while(len && (buf[len-1]=='\n'||buf[len-1]=='\r')){--len;}
         buf[len]=0;
         social_updatefield(name, buf, &privacy);
       }

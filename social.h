@@ -101,6 +101,15 @@ extern void social_user_removefromcircle(struct user* user, uint32_t circle, con
 * Returns: The number of additional updates loaded (will be 0 when there is nothing more to load)
 */
 extern unsigned int social_user_loadmore(struct user* user);
+/**
+* social_user_getfield:
+* @user: The user whose field you wish to access
+* @name: Name of the field
+*
+* Get the value of a #user's field update by name
+* Returns: The field's value, or NULL if none was found. Must not be modified or freed
+*/
+extern const char* social_user_getfield(struct user* user, const char* name);
 extern void social_addfriend(const unsigned char id[ID_SIZE], uint32_t circle);
 extern void social_removefriend(const unsigned char id[ID_SIZE], uint32_t circle);
 /**
@@ -111,6 +120,14 @@ extern void social_removefriend(const unsigned char id[ID_SIZE], uint32_t circle
 * Creates a post update
 */
 extern void social_createpost(const char* msg, struct privacy* privacy);
+/**
+* social_updatefield:
+* @name: Name of the field
+* @value: The field's (new) value
+* @privacy: Privacy setting for the field
+*
+* Sets the given field's value
+*/
 extern void social_updatefield(const char* name, const char* value, struct privacy* privacy);
 extern struct user* social_finduser(const unsigned char id[ID_SIZE]);
 extern void social_shareupdate(struct update* update);

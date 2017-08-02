@@ -355,6 +355,17 @@ unsigned int social_user_loadmore(struct user* user)
   return user->updatecount-oldcount;
 }
 
+const char* social_user_getfield(struct user* user, const char* name)
+{
+  unsigned int i;
+  for(i=0; i<user->updatecount; ++i)
+  {
+    if(user->updates[i].type!=UPDATE_FIELD){continue;}
+    if(!strcmp(user->updates[i].field.name, name)){return user->updates[i].field.value;}
+  }
+  return 0;
+}
+
 void social_addfriend(const unsigned char id[ID_SIZE], uint32_t circle)
 {
   struct user* friend=social_finduser(id);
