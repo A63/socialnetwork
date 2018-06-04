@@ -1,6 +1,6 @@
 /*
     udpstream, a reliable network layer on top of UDP
-    Copyright (C) 2017  alicia@ion.nu
+    Copyright (C) 2017-2018  alicia@ion.nu
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License version 3
@@ -195,6 +195,17 @@ void udpstream_readsocket(int sock)
     memcpy(&seq, stream->buf+sizeof(uint32_t), sizeof(uint16_t));
     memcpy(&type, stream->buf+sizeof(uint32_t)+sizeof(uint16_t), sizeof(uint8_t));
     stream->timestamp=now;
+    if(type==TYPE_RESET)
+    {
+      if(stream->state&STATE_INIT) // If it's an established stream, mark it as closed
+      {
+        stream->state|=STATE_CLOSED;
+      }else{ // Otherwise just ditch it
+        stream_free(stream);
+        return;
+      }
+      return;
+    }
     if(!(stream->state&STATE_INIT) && type!=TYPE_INIT)
     {
       // Ditch invalid streams
@@ -248,7 +259,7 @@ fprintf(stderr, "TODO: resend packets\n");
       break;
     case TYPE_INIT: // Should be at the start of each connection and must have sequence 0, size 0
 // TODO: If we receive a valid init for an already initialized stream, invalidate the old one (memset ->addr? plus STATE_CLOSED) and create a new stream to indicate a new connection?
-      if(seq || payloadsize)
+      if(seq || payloadsize) // Invalid init
       {
         stream_send(stream, TYPE_RESET, 0, 0, 0);
         if(stream->state&STATE_INIT) // If it's an established stream, mark it as closed
@@ -281,9 +292,6 @@ fprintf(stderr, "TODO: resend packets\n");
       stream->state&=STATE_PING^0xff;
       stream->buflen-=(payloadsize+HEADERSIZE);
       memmove(stream->buf, stream->buf+HEADERSIZE+payloadsize, stream->buflen);
-      break;
-    case TYPE_RESET:
-      stream->state|=STATE_CLOSED;
       break;
     }
   }
