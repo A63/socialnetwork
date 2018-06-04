@@ -1,6 +1,6 @@
 /*
     Socialnetwork, a truly peer-to-peer social network (in search of a better name)
-    Copyright (C) 2017  alicia@ion.nu
+    Copyright (C) 2017-2018  alicia@ion.nu
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License version 3
@@ -253,6 +253,27 @@ int main(int argc, char** argv)
         while((end=strchr(buf, '\r'))||(end=strchr(buf, '\n'))){end[0]=0;}
         // Note: we're also setting the privacy setting that will be referenced for future friend additions/removals from this circle, which might not be readily apparent. The generated update that sets the name (and privacy) of the circle is always private.
         social_setcircle(circle, buf, &privacy);
+      }
+      else if(!strncmp(buf, "bootstrap ", 10))
+      {
+        peer_bootstrap(sock, &buf[10]);
+      }
+      else if(!strcmp(buf, "help"))
+      {
+        printf("Available commands:\n"
+               "lsfriends (connected users)\n"
+               "lsupdates [<ID>]\n"
+               "loadmore [<ID>]\n"
+               "addfriend <ID>\n"
+               "update post\n"
+               "update field <name>\n"
+               "exportpeers <filename>\n"
+               "lscircles\n"
+               "privacy\n"
+               "privacy flag \n"
+               "privacy circle \n"
+               "setcircle <circle ID>\n"
+               "bootstrap <host>:<port>\n");
       }
       else{printf("Unknown command '%s'\n", buf);}
     }
