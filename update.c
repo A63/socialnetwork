@@ -1,6 +1,6 @@
 /*
     Socialnetwork, a truly peer-to-peer social network (in search of a better name)
-    Copyright (C) 2017  alicia@ion.nu
+    Copyright (C) 2017-2018  alicia@ion.nu
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License version 3
@@ -47,7 +47,7 @@ void social_update_write(struct buffer* buf, struct update* update)
   buffer_write(*buf, &update->timestamp, sizeof(update->timestamp));
   buffer_write(*buf, &update->privacy.flags, sizeof(update->privacy.flags));
   buffer_write(*buf, &update->privacy.circlecount, sizeof(update->privacy.circlecount));
-  buffer_write(*buf, update->privacy.circles, update->privacy.circlecount);
+  buffer_write(*buf, update->privacy.circles, sizeof(uint32_t)*update->privacy.circlecount);
   uint32_t privplaceholder=0;
   buffer_write(*buf, &privplaceholder, sizeof(privplaceholder));
   switch(update->type)
