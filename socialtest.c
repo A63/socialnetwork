@@ -258,6 +258,18 @@ int main(int argc, char** argv)
       {
         peer_bootstrap(sock, &buf[10]);
       }
+      else if(!strcmp(buf, "whoami"))
+      {
+        printf("ID: "PEERFMT"\n", PEERARG(peer_id));
+        struct sockaddr_storage sockaddr;
+        socklen_t addrlen=sizeof(sockaddr);
+        getsockname(sock, (struct sockaddr*)&sockaddr, &addrlen);
+        char addr[INET6_ADDRSTRLEN];
+        char port[64];
+        if(getnameinfo((struct sockaddr*)&sockaddr, addrlen, addr, INET6_ADDRSTRLEN, port, 64, NI_NUMERICHOST|NI_NUMERICSERV|NI_DGRAM)){continue;}
+        const char* fmt=((sockaddr.ss_family==AF_INET6)?"Address: [%s]:%s\n":"Address: %s:%s\n");
+        printf(fmt, addr, port);
+      }
       else if(!strcmp(buf, "help"))
       {
         printf("Available commands:\n"
@@ -273,7 +285,8 @@ int main(int argc, char** argv)
                "privacy flag \n"
                "privacy circle \n"
                "setcircle <circle ID>\n"
-               "bootstrap <host>:<port>\n");
+               "bootstrap <host>:<port>\n"
+               "whoami\n");
       }
       else{printf("Unknown command '%s'\n", buf);}
     }
